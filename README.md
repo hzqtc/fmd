@@ -38,7 +38,7 @@ The communication between FMD and clients go throught TCP connection.
 When client connected, FMD will send `OK FMD [version]`.
 
 Commands client can send are "play", "stop", "skip", "ban", "rate", "unrate", "info" and "bye", these commands are all self-explained.
-Response to command "info" is a json formmated string. Response to all other commands are "OK" when command execution finished.
+Response to command "info" is a json formmated string. No response to command "bye". Response to all other commands are "OK" when command execution finished.
 
 The simplest FMD client is telnet:
 

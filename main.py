@@ -61,7 +61,6 @@ class FMDaemon(Daemon):
 				data = conn.recv(1024)
 				data = data.strip()
 				if data == 'bye':
-					conn.send('OK\n')
 					conn.close()
 					break
 				elif data == 'play':
@@ -107,4 +106,3 @@ if __name__ == '__main__':
 	else:
 		print "usage: %s start|stop|restart" % sys.argv[0]
 		sys.exit(2)
-

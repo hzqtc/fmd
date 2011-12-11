@@ -18,7 +18,6 @@ class Song(object):
 		self.state = ''
 
 	def __init__(self, jsonobj):
-		self._json = jsonobj
 		self.title = jsonobj['title']
 		self.artist = jsonobj['artist']
 		self.album = jsonobj['albumtitle']
@@ -29,8 +28,17 @@ class Song(object):
 		self.sid = jsonobj['sid']
 		self.state = ''
 
-	def toJSON(self):
-		return self._json
+	def toObj(self):
+		obj = {
+			'title': self.title,
+			'artist': self.artist,
+			'album': self.album,
+			'length': self.length,
+			'pubdate': self.pubdate,
+			'cover': self.cover,
+			'url': self.url,
+		}
+		return obj
 
 class Playlist(object):
 	def __init__(self, channel, uid, token, expire):

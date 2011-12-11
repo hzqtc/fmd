@@ -48,5 +48,4 @@ class Player(object):
 		if not self.playmode:
 			return json.dumps({ 'status': 'stopped' })
 		else:
-			return json.dumps({ 'status': 'playing', 'song':self.current.toJSON() })
-
+			return json.dumps({ 'status': 'playing', 'progress': self.progress, 'song': self.current.toObj() })
