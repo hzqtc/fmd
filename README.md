@@ -69,8 +69,8 @@ The simplest FMD client is telnet:
 
 FMD is written in python2 and depends on `gstreamer0.10-python`. The recommendation is to install all gstreamer components and plugins.
 
-To try FMD, just clone the repository. Run `python2 fmd/main.py start` and try the telnet examples above.
+To try FMD, just clone the repository. Run `python2 fmd/main.py start` and try the telnet example above.
 
-## Thanks for dropping by
+## Contribute
 
 This project is on its very ealy stage and requires lots of improvements. Any feedbacks, patches, forks and other helps are welcome.
