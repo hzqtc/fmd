@@ -80,6 +80,9 @@ class Playlist(object):
 		return self.playlist[self.playing]
 
 	def skip(self):
+		if self.playing < 0 or self.playing >= len(self.playlist):
+			return None
+
 		self.playlist[self.playing].state = 's'
 		del self.playlist[self.playing + 1:]
 		self.sendLongReport('s')
@@ -88,6 +91,9 @@ class Playlist(object):
 		return self.playlist[self.playing]
 
 	def ban(self):
+		if self.playing < 0 or self.playing >= len(self.playlist):
+			return None
+
 		self.playlist[self.playing].state = 'b'
 		del self.playlist[self.playing + 1:]
 		self.sendLongReport('b')
@@ -96,10 +102,20 @@ class Playlist(object):
 		return self.playlist[self.playing]
 
 	def rate(self):
+		if self.playing < 0 or self.playing >= len(self.playlist):
+			return False
+
+		self.playlist[self.playing].like = True
 		self.sendShortReport('r')
+		return True
 
 	def unrate(self):
+		if self.playing < 0 or self.playing >= len(self.playlist):
+			return False
+
+		self.playlist[self.playing].like = True
 		self.sendShortReport('u')
+		return True
 
 	def sendLongReport(self, action):
 		params = {

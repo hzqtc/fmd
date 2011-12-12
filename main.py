@@ -56,7 +56,7 @@ class FMDaemon(Daemon):
 
 		while True:
 			conn, addr = sock.accept()
-			conn.send('OK FMD 1.0\n')
+			conn.send('OK FMD 1.0')
 			while True:
 				data = conn.recv(1024)
 				data = data.strip()
@@ -65,30 +65,42 @@ class FMDaemon(Daemon):
 					break
 				elif data == 'play':
 					self.player.play()
-					conn.send('OK\n')
+					conn.send('OK')
 				elif data == 'stop':
 					self.player.stop()
-					conn.send('OK\n')
+					conn.send('OK')
 				elif data == 'skip':
-					self.player.stop()
-					self.player.setSong(self.playlist.skip())
-					self.player.play()
-					conn.send('OK\n')
+					song = self.playlist.skip()
+					if song:
+						self.player.stop()
+						self.player.setSong(song)
+						self.player.play()
+						conn.send('OK')
+					else:
+						conn.send('Failed')
 				elif data == 'ban':
-					self.player.stop()
-					self.player.setSong(self.playlist.ban())
-					self.player.play()
-					conn.send('OK\n')
+					song = self.playlist.ban()
+					if song:
+						self.player.stop()
+						self.player.setSong(song)
+						self.player.play()
+						conn.send('OK')
+					else:
+						conn.send('Failed')
 				elif data == 'rate':
-					self.playlist.rate()
-					conn.send('OK\n')
+					if self.playlist.rate():
+						conn.send('OK')
+					else:
+						conn.send('Failed')
 				elif data == 'unrate':
-					self.playlist.unrate()
-					conn.send('OK\n')
+					if self.playlist.unrate():
+						conn.send('OK')
+					else:
+						conn.send('Failed')
 				elif data == 'info':
-					conn.send(self.player.info() + '\n')
+					conn.send(self.player.info())
 				else:
-					conn.send('unknown command: %s\n' % data)
+					conn.send('unknown command: %s' % data)
 
 if __name__ == '__main__':
 	fmd = FMDaemon()
