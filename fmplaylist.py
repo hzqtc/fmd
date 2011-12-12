@@ -15,6 +15,7 @@ class Song(object):
 		self.cover = ''
 		self.url = ''
 		self.sid = ''
+		self.like = False
 		self.state = ''
 
 	def __init__(self, jsonobj):
@@ -26,6 +27,7 @@ class Song(object):
 		self.cover = jsonobj['picture']
 		self.url = jsonobj['url']
 		self.sid = jsonobj['sid']
+		self.like = True if jsonobj['like'] == '1' else False
 		self.state = ''
 
 	def toObj(self):
@@ -37,6 +39,7 @@ class Song(object):
 			'pubdate': self.pubdate,
 			'cover': self.cover,
 			'url': self.url,
+			'like': self.like,
 		}
 		return obj
 
