@@ -3,6 +3,7 @@
 import os
 import sys
 import socket
+import thread
 import ConfigParser
 
 from fmplaylist import Playlist
@@ -49,6 +50,52 @@ class FMDaemon(Daemon):
 			with open(config_filename, 'wb') as configfile:
 				config.write(configfile)
 
+	def handle(self, conn):
+		while True:
+			data = conn.recv(1024)
+			data = data.strip()
+			if data == 'bye':
+				conn.close()
+				break
+			elif data == 'play':
+				self.player.play()
+				conn.send('OK')
+			elif data == 'stop':
+				self.player.stop()
+				conn.send('OK')
+			elif data == 'skip':
+				song = self.playlist.skip()
+				if song:
+					self.player.stop()
+					self.player.setSong(song)
+					self.player.play()
+					conn.send('OK')
+				else:
+					conn.send('Failed')
+			elif data == 'ban':
+				song = self.playlist.ban()
+				if song:
+					self.player.stop()
+					self.player.setSong(song)
+					self.player.play()
+					conn.send('OK')
+				else:
+					conn.send('Failed')
+			elif data == 'rate':
+				if self.playlist.rate():
+					conn.send('OK')
+				else:
+					conn.send('Failed')
+			elif data == 'unrate':
+				if self.playlist.unrate():
+					conn.send('OK')
+				else:
+					conn.send('Failed')
+			elif data == 'info':
+				conn.send(self.player.info())
+			else:
+				conn.send('unknown command: %s' % data)
+
 	def run(self):
 		self.readConfig()
 		self.playlist = Playlist(self.channel, self.uid, self.token, self.expire)
@@ -64,50 +111,7 @@ class FMDaemon(Daemon):
 		while True:
 			conn, addr = sock.accept()
 			conn.send('OK FMD 1.0')
-			while True:
-				data = conn.recv(1024)
-				data = data.strip()
-				if data == 'bye':
-					conn.close()
-					break
-				elif data == 'play':
-					self.player.play()
-					conn.send('OK')
-				elif data == 'stop':
-					self.player.stop()
-					conn.send('OK')
-				elif data == 'skip':
-					song = self.playlist.skip()
-					if song:
-						self.player.stop()
-						self.player.setSong(song)
-						self.player.play()
-						conn.send('OK')
-					else:
-						conn.send('Failed')
-				elif data == 'ban':
-					song = self.playlist.ban()
-					if song:
-						self.player.stop()
-						self.player.setSong(song)
-						self.player.play()
-						conn.send('OK')
-					else:
-						conn.send('Failed')
-				elif data == 'rate':
-					if self.playlist.rate():
-						conn.send('OK')
-					else:
-						conn.send('Failed')
-				elif data == 'unrate':
-					if self.playlist.unrate():
-						conn.send('OK')
-					else:
-						conn.send('Failed')
-				elif data == 'info':
-					conn.send(self.player.info())
-				else:
-					conn.send('unknown command: %s' % data)
+			thread.start_new_thread(self.handle, (conn, ))
 
 if __name__ == '__main__':
 	fmd = FMDaemon()
