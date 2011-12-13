@@ -18,6 +18,7 @@ class FMDaemon(Daemon):
 		self.expire = ''
 		self.addr = 'localhost'
 		self.port = 10098
+		self.autoplay = False
 
 	def readConfig(self):
 		config = ConfigParser.RawConfigParser()
@@ -31,6 +32,8 @@ class FMDaemon(Daemon):
 			if config.has_section('Server'):
 				self.addr = config.get('Server', 'addr')
 				self.port = config.getint('Server', 'port')
+			if config.has_section('Behavior'):
+				self.autoplay = config.getboolean('Behavior', 'autoplay')
 		else:
 			config.add_section('DoubanFM')
 			config.set('DoubanFM', 'channel', self.channel)
@@ -41,6 +44,7 @@ class FMDaemon(Daemon):
 			config.add_section('Server')
 			config.set('Server', 'addr', self.addr)
 			config.set('Server', 'port', self.port)
+			config.set('Behavior', self.autoplay)
 
 			with open(config_filename, 'wb') as configfile:
 				config.write(configfile)
@@ -53,6 +57,9 @@ class FMDaemon(Daemon):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.bind((socket.gethostbyname(self.addr), self.port))
 		sock.listen(5)
+
+		if self.autoplay:
+			self.player.play()
 
 		while True:
 			conn, addr = sock.accept()
