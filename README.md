@@ -6,8 +6,8 @@ FMD plays music from Douban FM channels in background and communicate with clien
 
 ## Config
 
-The main config file is '~/.fmd.conf', a default config file will be created when first started.
-Config file includes two sections: "DoubanFM" and "Server".
+The main config file is "~/.fmd.conf", a default config file will be created when first started.
+Config file includes three sections: "DoubanFM", "Server" and "Behavior".
 
 In "DoubanFM" section, there are four config values:
 
@@ -20,22 +20,28 @@ To get a complete channel list, try:
 	
 	wget -q -O - "http://www.douban.com/j/app/radio/channels" | json_pp
 
-Only `channel` is required, others are only required when `channel = 0` (Private Channel).
+Only "channel" is required, others are only necessary when `channel = 0` (Private Channel).
 
-To get your own `uid`, `token` and `expore`, try:
+To get your own "uid", "token" and "expire", try:
 
-	wget -q -O - --post-data="email=[email]&password=[passwd]&app_name=radio_desktop_win&version=100"  "http://www.douban.com/j/app/login" | json_pp
+	wget -q -O - --post-data="email=[email]&password=[passwd]&app_name=radio_desktop_win&version=100" "http://www.douban.com/j/app/login" | json_pp
+
+Replace "[email]" and "[passwd]" with your douban account and password.
 
 In "Server" section, there are two config values:
 
-	addr [string]   # FMD bind addr, default to `localhost`
+	addr [string]   # FMD bind addr, default to "localhost"
 	port [int]      # FMD listen port, default to 10098, which is the combination of two ascii code 'd' and 'b'
+
+In "Behavior" section, one config value is provided now:
+
+	autoplay [bool] # auto play when FMD started
 
 ## Protocol
 
 The communication between FMD and clients go throught TCP connection.
 
-When client connected, FMD will send `OK FMD [version]`.
+When client connected, FMD will send a welcome message: "OK FMD [version]".
 
 Commands client can send are "play", "stop", "skip", "ban", "rate", "unrate", "info" and "bye", these commands are all self-explained.
 Response to command "info" is a json formmated string. No response to command "bye". Response to all other commands are "OK" when command execution finished.
@@ -69,7 +75,7 @@ The simplest FMD client is telnet:
 
 FMD is written in python2 and depends on `gstreamer0.10-python`. The recommendation is to install all gstreamer components and plugins.
 
-To try FMD, just clone the repository. Run `python2 fmd/main.py start` and try the telnet example above.
+To try FMD, just clone the repository. Run `python2 fmd/main.py start` and try the telnet example above. You may also interested in [FMC](https://github.com/hzqtc/fmc), a simple CLI client for FMD.
 
 ## Contribute
 
