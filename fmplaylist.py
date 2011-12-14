@@ -10,7 +10,6 @@ class Song(object):
 		self.title = ''
 		self.artist = ''
 		self.album = ''
-		self.length = 0
 		self.pubdate = ''
 		self.cover = ''
 		self.url = ''
@@ -22,7 +21,6 @@ class Song(object):
 		self.title = jsonobj['title']
 		self.artist = jsonobj['artist']
 		self.album = jsonobj['albumtitle']
-		self.length = jsonobj['length']
 		self.pubdate = jsonobj['public_time']
 		self.cover = jsonobj['picture']
 		self.url = jsonobj['url']
@@ -35,7 +33,6 @@ class Song(object):
 			'title': self.title,
 			'artist': self.artist,
 			'album': self.album,
-			'length': self.length,
 			'pubdate': self.pubdate,
 			'cover': self.cover,
 			'url': self.url,
@@ -113,7 +110,7 @@ class Playlist(object):
 		if self.playing < 0 or self.playing >= len(self.playlist):
 			return False
 
-		self.playlist[self.playing].like = True
+		self.playlist[self.playing].like = False
 		self.sendShortReport('u')
 		return True
 
