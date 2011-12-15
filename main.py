@@ -20,6 +20,7 @@ class FMDaemon(Daemon):
 		self.addr = 'localhost'
 		self.port = 10098
 		self.autoplay = False
+		self.cache = True
 
 	def readConfig(self):
 		config = ConfigParser.RawConfigParser()
@@ -35,6 +36,7 @@ class FMDaemon(Daemon):
 				self.port = config.getint('Server', 'port')
 			if config.has_section('Behavior'):
 				self.autoplay = config.getboolean('Behavior', 'autoplay')
+				self.cache = config.getboolean('Behavior', 'cache')
 		else:
 			print >> sys.stderr, 'Warning: creating default configure file.'
 			config.add_section('DoubanFM')
@@ -49,15 +51,19 @@ class FMDaemon(Daemon):
 
 			config.add_section('Behavior')
 			config.set('Behavior', 'autoplay', self.autoplay)
+			config.set('Behavior', 'cache', self.cache)
 
 			with open(config_filename, 'wb') as configfile:
 				config.write(configfile)
 
+	def playlistChanged(self, playlist, current):
+		if len(playlist) > current + 1 and (current >= 0 or not self.autoplay):
+			self.player.cacheFilter(playlist[current + 1])
 
 	def handle(self, conn):
 		while True:
 			data = conn.recv(1024)
-			data = data.strip()
+			data = data.strip().lower()
 			if data == 'bye':
 				conn.close()
 				break
@@ -103,8 +109,8 @@ class FMDaemon(Daemon):
 
 
 	def run(self):
-		self.playlist = Playlist(self.channel, self.uid, self.token, self.expire)
-		self.player = Player(on_end = self.playlist.next)
+		self.playlist = Playlist(self.channel, self.uid, self.token, self.expire, self.playlistChanged)
+		self.player = Player(on_end = self.playlist.next, use_cache = self.cache)
 
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.bind((socket.gethostbyname(self.addr), self.port))
@@ -115,7 +121,7 @@ class FMDaemon(Daemon):
 
 		while True:
 			conn, addr = sock.accept()
-			conn.send('OK FMD 1.0')
+			conn.send('OK FMD 1.0\n')
 			thread.start_new_thread(self.handle, (conn, ))
 
 if __name__ == '__main__':
@@ -128,6 +134,9 @@ if __name__ == '__main__':
 			fmd.stop()
 		elif 'restart' == sys.argv[1]:
 			fmd.restart()
+		elif 'run' == sys.argv[1]:
+			fmd.readConfig()
+			fmd.run()
 		else:
 			print "Unknown command"
 			sys.exit(2)

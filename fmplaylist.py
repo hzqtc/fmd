@@ -41,7 +41,7 @@ class Song(object):
 		return obj
 
 class Playlist(object):
-	def __init__(self, channel, uid, token, expire):
+	def __init__(self, channel, uid, token, expire, playlist_changed = None):
 		self.playlist = []
 		self.playing = -1
 
@@ -52,6 +52,8 @@ class Playlist(object):
 		self.uid = uid
 		self.token = token
 		self.expire = expire
+
+		self.playlist_change_cb = playlist_changed
 
 	def history(self):
 		history = StringIO.StringIO()
@@ -74,6 +76,7 @@ class Playlist(object):
 		elif len(self.playlist) - 1 == self.playing:
 			self.sendLongReport('p')
 		self.playing += 1
+		self.notifyCallbacks()
 		return self.playlist[self.playing]
 
 	def skip(self):
@@ -85,6 +88,7 @@ class Playlist(object):
 		self.sendLongReport('s')
 
 		self.playing += 1
+		self.notifyCallbacks()
 		return self.playlist[self.playing]
 
 	def ban(self):
@@ -96,6 +100,7 @@ class Playlist(object):
 		self.sendLongReport('b')
 
 		self.playing += 1
+		self.notifyCallbacks()
 		return self.playlist[self.playing]
 
 	def rate(self):
@@ -135,6 +140,7 @@ class Playlist(object):
 				self.playlist.append(song)
 			except KeyError:
 				continue
+		self.notifyCallbacks()
 
 	def sendShortReport(self, action):
 		params = {
@@ -150,5 +156,7 @@ class Playlist(object):
 		url = '%s?%s' % (self.api, urllib.urlencode(params))
 		urllib2.urlopen(url)
 
-
+	def notifyCallbacks(self):
+		if self.playlist_change_cb:
+			self.playlist_change_cb(self.playlist, self.playing)
 # vim: noet
