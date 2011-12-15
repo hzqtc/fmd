@@ -97,7 +97,6 @@ class FMDaemon(Daemon):
 				conn.send('unknown command: %s' % data)
 
 	def run(self):
-		self.readConfig()
 		self.playlist = Playlist(self.channel, self.uid, self.token, self.expire)
 		self.player = Player(on_end = self.playlist.next)
 
@@ -117,6 +116,7 @@ if __name__ == '__main__':
 	fmd = FMDaemon()
 	if len(sys.argv) == 2:
 		if 'start' == sys.argv[1]:
+			self.readConfig()
 			fmd.start()
 		elif 'stop' == sys.argv[1]:
 			fmd.stop()
