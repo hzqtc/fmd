@@ -99,6 +99,8 @@ class FMDaemon(Daemon):
 				conn.send(self.player.info())
 			else:
 				conn.send('unknown command: %s' % data)
+			conn.send('\n')
+
 
 	def run(self):
 		self.playlist = Playlist(self.channel, self.uid, self.token, self.expire)
