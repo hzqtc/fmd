@@ -67,7 +67,7 @@ class FMDaemon(Daemon):
 		for cmd, params in commands:
 			ok = True
 
-			if cmd == 'pause' and ('f' in params) or ('0' in params):
+			if cmd == 'pause' and (('f' in params) or ('0' in params)):
 				cmd = 'play'
 			elif cmd == 'toggle':
 				if self.player.stopped or self.player.paused:
@@ -81,39 +81,57 @@ class FMDaemon(Daemon):
 			elif cmd == 'playlist':
 				cmd = 'playlistinfo'
 
+			playlist = self.playlist.playlist
+
 			# main cmd handler
 			if cmd == 'bye':
-				return None
+				return
 			elif cmd in [ 'seekid', 'seek' ]:
 				# FIXME: currently ignore songid
-				offset = int(params.split()[-1].replace('"',''))
+				offset = int(params.split('" "')[-1].replace('"',''))
 				self.player.seek(offset)
 			elif cmd in [ 'play', 'stop', 'pause' ]:
 				getattr(self.player, cmd)()
+			elif cmd == 'playid':
+				sid = params.replace('"', '')
+				[ self.player.setSong(song) for song in playlist if song.sid == sid ]
 			elif cmd in ['skip', 'next', 'prev', 'ban']:
 				song = getattr(self.playlist, cmd)()
 				if song:
-					self.player.stop()
 					self.player.setSong(song)
-					self.player.play()
 				else:
 					ok = False
 			elif cmd == 'currentsong':
 				song = self.player.current
 				if song:
-					response += 'file: %s\n' % song.url
-					response += 'Time: %s\n' % self.player.length
-					response += 'Artist: %s\n' % song.artist
-					response += 'Title: %s\n' % song.title
-					response += 'Album: %s\n' % song.album
-					response += 'Date: %s\n' % song.pubdate
-					response += 'Pos: %s\n' % self.playlist.playlist.index(song)
-					response += 'Id: %s\n' % song.sid
+					response += song.info(playlist)
+					# response += 'Time: %s\n' % self.player.length
 			elif cmd == 'ping':
-				ok = True
-			elif cmd in ['rate', 'unrate']:
+				pass
+			elif cmd in [ 'repeat', 'random', 'lsinfo', 'listplaylists' ]:
+				# dummy
+				pass
+			elif cmd == 'search':
+				field, value = [ x.replace('"', '') for x in params.split('" "', 1) ]
+				print("FV: %s %s"  % (field, value))
+				if field in [ 'album', 'title', 'artist' ]:
+					for song in playlist:
+						if getattr(song, field) == unicode(value, 'UTF-8'):
+							response += song.info()
+				print("Search res:\n%s\n" % response)
+			elif cmd == 'count':
+				# dummy
+				response += "songs: 0\nplaytime: 0\n"
+			elif cmd in [ 'plchanges', 'listallinfo' ]:
+				for i in xrange(len(playlist)):
+					response += playlist[i].info()
+					response += "Pos: %s\n" % i
+			elif cmd in [ 'rate', 'unrate' ]:
 				if not getattr(self.playlist, cmd)():
 					ok = False
+			elif cmd == 'listall':
+				for song in playlist:
+					response += song.shortinfo()
 			elif cmd == 'status':
 				response += 'volume: 100\n'
 				response += 'repeat: 1\n'
@@ -193,13 +211,14 @@ class FMDaemon(Daemon):
 
 			# execute command(s)
 			response = self.execute(commands, command_list)
-			# print("Response: [[[%s]]]" % response)
+			# print("Response ----\n%s\n-------------\n" % response)
 
-			if response:
+			if response != None:
 				conn.send(response)
 				command_list = None
 				commands = []
 			else:
+				conn.close()
 				break
 
 	def run(self):

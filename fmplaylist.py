@@ -40,6 +40,19 @@ class Song(object):
 		}
 		return obj
 
+	def info(self, playlist = None):
+		result = self.shortinfo() + \
+				'Artist: %s\n' % self.artist + 'Title: %s\n' % self.title + \
+				'Album: %s\n' % self.album + 'Date: %s\n' % self.pubdate + \
+				'Id: %s\n' % self.sid
+		if playlist:
+			result += 'Pos: %s\n' % playlist.index(self)
+		return result
+
+	def shortinfo(self):
+		return 'file: %s\n' % self.url
+
+
 class Playlist(object):
 	def __init__(self, channel, uid, token, expire, playlist_changed = None):
 		self.playlist = []

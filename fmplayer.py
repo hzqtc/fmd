@@ -41,19 +41,22 @@ class Player(object):
 			if self.paused or self.stopped:
 				continue
 
-			# try:
+			try:
 				self.progress = self.playbin.query_position(gst.FORMAT_TIME, None)[0] / 1000000000
 				self.length = self.playbin.query_duration(gst.FORMAT_TIME, None)[0] / 1000000000
-			# except:
-			# 	pass
+			except:
+				pass
 
-			if self.progress == last_progress and not self.paused and not self.stopped:
+			if self.progress == last_progress and not self.paused and \
+			not self.stopped and self.progress > 0:
 				lag_counter += 1
 			else:
 				lag_counter = 0
 
-			# print("watch: %s : %s | %s" % (self.progress, self.length, lag_counter))
-			if (self.progress >= self.length and self.length > 0) or lag_counter > 15:
+			# state = self.playbin.get_state()[1]
+			# print("watch: %s : %s | %s | %s" % (self.progress, self.length, lag_counter, state))
+
+			if (self.progress >= self.length and self.length > 0) or lag_counter > 5:
 				if self.on_end:
 					lag_counter = 0
 					self.stop()
@@ -66,8 +69,12 @@ class Player(object):
 			last_progress = self.progress
 
 	def setSong(self, song):
-		self.current = song
+		if self.current and self.current.sid == song.sid:
+			return
 
+		self.stop()
+		self.current = song
+		self.play()
 
 	def download(self, song):
 		filename = self.cache_dir + '%s.mp3' % song.sid
@@ -122,7 +129,7 @@ class Player(object):
 
 	def play(self, rewind = False):
 		if not self.current and self.on_end:
-			self.setSong(self.on_end())
+			self.current = self.on_end()
 
 		if self.current:
 			location = self.cacheFilter(self.current)
