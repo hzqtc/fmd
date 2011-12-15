@@ -50,6 +50,7 @@ The protocol is similar to [MPD Protocol](http://mpd.wikia.com/wiki/MusicPlayerD
  * stop
  * next
  * previous
+ * ping
  * currentsong
  * status
  * close (bye)
