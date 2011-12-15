@@ -45,6 +45,8 @@ class FMDaemon(Daemon):
 			config.add_section('Server')
 			config.set('Server', 'addr', self.addr)
 			config.set('Server', 'port', self.port)
+
+			config.add_section('Behavior')
 			config.set('Behavior', self.autoplay)
 
 			with open(config_filename, 'wb') as configfile:
