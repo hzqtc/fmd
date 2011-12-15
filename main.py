@@ -94,11 +94,11 @@ class FMDaemon(Daemon):
 				getattr(self.player, cmd)()
 			elif cmd == 'playid':
 				sid = params.replace('"', '')
-				[ self.player.setSong(song, playlist) for song in playlist if song.sid == sid ]
+				[ self.player.setSong(song, self.playlist) for song in playlist if song.sid == sid ]
 			elif cmd in ['skip', 'next', 'prev', 'ban']:
 				song = getattr(self.playlist, cmd)()
 				if song:
-					self.player.setSong(song, playlist)
+					self.player.setSong(song, self.playlist)
 				else:
 					ok = False
 			elif cmd == 'currentsong':
