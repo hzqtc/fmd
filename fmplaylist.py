@@ -181,6 +181,15 @@ class Playlist(object):
 		url = '%s?%s' % (self.api, urllib.urlencode(params))
 		urllib2.urlopen(url)
 
+	def setPlaying(self, song):
+		try:
+			index = self.playlist.index(song)
+			if index != self.playing:
+				self.playing = index
+				self.notifyCallbacks()
+		except:
+			pass
+
 	def notifyCallbacks(self):
 		if self.playlist_change_cb:
 			self.playlist_change_cb(self.playlist, self.playing)
