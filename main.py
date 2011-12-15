@@ -4,6 +4,7 @@ import os
 import sys
 import socket
 import thread
+import time
 import ConfigParser
 
 from fmplaylist import Playlist
@@ -60,10 +61,11 @@ class FMDaemon(Daemon):
 		if len(playlist) > current + 1 and (current >= 0 or not self.autoplay):
 			self.player.cacheFilter(playlist[current + 1])
 
-	def handle(self, conn):
-		while True:
-			data = conn.recv(1024)
-			[ cmd, params ] = data.strip().lower().split(' ', 1)
+	def execute(self, commands, command_list = None):
+		response = ''
+
+		for cmd, params in commands:
+			ok = True
 
 			if cmd == 'pause' and ('f' in params) or ('0' in params):
 				cmd = 'play'
@@ -72,6 +74,8 @@ class FMDaemon(Daemon):
 					cmd = 'play'
 				else:
 					cmd = 'pause'
+			elif cmd == 'close':
+				cmd = 'bye'
 			elif cmd == 'previous':
 				cmd = 'prev'
 			elif cmd == 'playlist':
@@ -79,38 +83,119 @@ class FMDaemon(Daemon):
 
 			# main cmd handler
 			if cmd == 'bye':
-				conn.close()
-				break
+				return None
 			elif cmd in [ 'play', 'stop', 'pause' ]:
 				getattr(self.player, cmd)()
-				conn.send('OK')
-			elif cmd in ['skip', 'next', 'prev', 'ban']
+			elif cmd in ['skip', 'next', 'prev', 'ban']:
 				song = getattr(self.playlist, cmd)()
 				if song:
 					self.player.stop()
 					self.player.setSong(song)
 					self.player.play()
-					conn.send('OK')
 				else:
-					conn.send('Failed')
+					ok = False
+			elif cmd == 'currentsong':
+				song = self.player.current
+				if song:
+					response += 'file: %s\n' % song.url
+					response += 'Time: %s\n' % self.player.length
+					response += 'Artist: %s\n' % song.artist
+					response += 'Title: %s\n' % song.title
+					response += 'Album: %s\n' % song.album
+					response += 'Date: %s\n' % song.pubdate
+					response += 'Pos: %s\n' % self.playlist.playlist.index(song)
+					response += 'Id: %s\n' % song.sid
+			elif cmd == 'ping':
+				ok = True
 			elif cmd in ['rate', 'unrate']:
-				if getattr(self.playlist, cmd)():
-					conn.send('OK')
-				else:
-					conn.send('Failed')
+				if not getattr(self.playlist, cmd)():
+					ok = False
 			elif cmd == 'status':
-				conn.send('volume: 1\n')
-				conn.send('repeat: 1\n')
-				conn.send('random: 1\n')
-				conn.send('single: 0\n')
-				conn.send('playlist: 1\n')
-				conn.send('playlistlength: %s\n' % len(self.Playlist.playlist))
-				conn.send('state: %s\n' % self.Player.status())
-				conn.send('OK')
-			else:
-				conn.send('unknown command: "%s"' % cmd)
-			conn.send('\n')
 
+				response += 'volume: 100\n'
+				response += 'repeat: 1\n'
+				response += 'random: 1\n'
+				response += 'single: 0\n'
+				response += 'playlist: 1\n'
+				response += 'playlistlength: %s\n' % len(self.playlist.playlist)
+				response += 'xfade: 0\n'
+				response += 'mixrampdb: 0.000000\n'
+				response += 'mixrampdelay: nan\n'
+				response += 'state: %s\n' % self.player.status()
+				song = self.player.current
+				if song:
+					song_index = self.playlist.playlist.index(song)
+					response += 'song: %s\n' % song_index
+					response += 'songid: %s\n' % song.sid
+					response += 'time: %s\n' % self.player.length
+					response += 'elapsed: %s\n' % self.player.progress
+					response += 'bitrate: 404\n'
+					response += 'audio: 44100::24:2\n'
+					response += 'nextsong: %s\n' % ((song_index + 1) %
+									 len(self.playlist.playlist))
+					response += 'nextsongid: %s\n' % self.playlist.getNext().sid
+
+			elif cmd == 'command_list_end':
+				command_list = None
+			else:
+				ok = False
+
+			if ok:
+				if command_list == 'list_ok':
+					response += 'list_OK\n'
+				elif not command_list:
+					response += 'OK\n'
+			else:
+				if cmd == "":
+					response += 'ACK [5@0] {} No command given\n'
+				else:
+					response += 'ACK [5@0] {} unknown command: "%s"\n' % cmd
+				if command_list:
+					break
+
+		return response.encode('utf-8')
+
+	def handle(self, conn):
+		command_list = None
+		commands = []
+
+		while True:
+			line = ''
+			while True:
+				char = conn.recv(1)
+				if char == '\n':
+					break
+				elif char == '':
+					line = None
+					break
+				else:
+					line += char
+
+			if not line:
+				break
+
+			cmd, params = (line.strip().lower().split(' ', 1) + [''])[0:2]
+			print("%s" % line)
+
+			if cmd == 'command_list_begin':
+				command_list = 'list'
+			elif cmd == 'command_list_ok_begin':
+				command_list = 'list_ok'
+			else:
+				commands += [(cmd, params)]
+
+			if command_list and cmd != 'command_list_end':
+				continue
+
+			# execute command(s)
+			response = self.execute(commands, command_list)
+			print("Got response: [[[%s]]]" % response)
+			if response:
+				conn.send(response)
+				command_list = None
+				commands = []
+			else:
+				break
 
 	def run(self):
 		self.playlist = Playlist(self.channel, self.uid, self.token, self.expire, self.playlistChanged)
@@ -125,7 +210,7 @@ class FMDaemon(Daemon):
 
 		while True:
 			conn, addr = sock.accept()
-			conn.send('OK FMD 1.0\n')
+			conn.send('OK MPD 0.11.0 (FMD 0.1)\n')
 			thread.start_new_thread(self.handle, (conn, ))
 
 if __name__ == '__main__':

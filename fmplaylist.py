@@ -79,6 +79,12 @@ class Playlist(object):
 		self.notifyCallbacks()
 		return self.playlist[self.playing]
 
+	def getNext(self):
+		if len(self.playlist) > self.playing + 1:
+			return self.playlist[self.playing + 1]
+		else:
+			return self.playlist[0]
+
 	def skip(self):
 		if self.playing < 0 or self.playing >= len(self.playlist):
 			return None

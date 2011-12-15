@@ -31,7 +31,7 @@ class Player(object):
 	def _watch_progress(self):
 		self.progress = 0
 		while True:
-			time.sleep(1)
+			time.sleep(0.2)
 			try:
 				self.progress = self.playbin.query_position(gst.FORMAT_TIME, None)[0] / 1000000000
 				self.length = self.playbin.query_duration(gst.FORMAT_TIME, None)[0] / 1000000000
@@ -39,9 +39,8 @@ class Player(object):
 				continue
 			if self.progress >= self.length:
 				if self.on_end:
-					self.stop()
-					self.setSong(self.on_end())
-					self.play()
+					self.current = None
+					self.play(True)
 				break
 
 	def setSong(self, song):
@@ -89,7 +88,7 @@ class Player(object):
 		return result
 
 
-	def play(self):
+	def play(self, rewind = False):
 		if not self.current and self.on_end:
 			self.setSong(self.on_end())
 
@@ -97,6 +96,9 @@ class Player(object):
 			location = self.cacheFilter(self.current)
 			print("Now playing: " + location)
 			self.playbin.set_property("uri", location)
+
+		if rewind:
+			self.playbin.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, 0)
 
 		self.stopped = False
 		self.paused = False
