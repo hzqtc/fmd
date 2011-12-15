@@ -45,6 +45,8 @@ class FMDaemon(Daemon):
 			config.add_section('Server')
 			config.set('Server', 'addr', self.addr)
 			config.set('Server', 'port', self.port)
+
+			config.add_section('Behavior')
 			config.set('Behavior', self.autoplay)
 
 			with open(config_filename, 'wb') as configfile:
@@ -59,42 +61,42 @@ class FMDaemon(Daemon):
 				break
 			elif data == 'play':
 				self.player.play()
-				conn.send('OK')
+				conn.send(self.player.info())
 			elif data == 'stop':
 				self.player.stop()
-				conn.send('OK')
+				conn.send(self.player.info())
 			elif data == 'skip':
 				song = self.playlist.skip()
 				if song:
 					self.player.stop()
 					self.player.setSong(song)
 					self.player.play()
-					conn.send('OK')
+					conn.send(self.player.info())
 				else:
-					conn.send('Failed')
+					conn.send('Not playing')
 			elif data == 'ban':
 				song = self.playlist.ban()
 				if song:
 					self.player.stop()
 					self.player.setSong(song)
 					self.player.play()
-					conn.send('OK')
+					conn.send(self.player.info())
 				else:
-					conn.send('Failed')
+					conn.send('Not playing')
 			elif data == 'rate':
 				if self.playlist.rate():
-					conn.send('OK')
+					conn.send(self.player.info())
 				else:
-					conn.send('Failed')
+					conn.send('Not playing')
 			elif data == 'unrate':
 				if self.playlist.unrate():
-					conn.send('OK')
+					conn.send(self.player.info())
 				else:
-					conn.send('Failed')
+					conn.send('Not playing')
 			elif data == 'info':
 				conn.send(self.player.info())
 			else:
-				conn.send('unknown command: %s' % data)
+				conn.send('Unknown command: %s' % data)
 
 	def run(self):
 		self.readConfig()

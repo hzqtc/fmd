@@ -3,8 +3,6 @@
 import time
 import thread
 import json
-import pygst
-pygst.require("0.10")
 import gst
 
 class Player(object):
