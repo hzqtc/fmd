@@ -50,6 +50,7 @@ class FMDaemon(Daemon):
 			with open(config_filename, 'wb') as configfile:
 				config.write(configfile)
 
+
 	def handle(self, conn):
 		while True:
 			data = conn.recv(1024)
@@ -116,7 +117,7 @@ if __name__ == '__main__':
 	fmd = FMDaemon()
 	if len(sys.argv) == 2:
 		if 'start' == sys.argv[1]:
-			self.readConfig()
+			fmd.readConfig()
 			fmd.start()
 		elif 'stop' == sys.argv[1]:
 			fmd.stop()
