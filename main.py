@@ -60,6 +60,9 @@ class FMDaemon(Daemon):
 				conn.close()
 				break
 			elif data == 'play':
+				# stop first if already in play mode
+				if self.player.playmode:
+					self.player.stop()
 				self.player.play()
 				conn.send(self.player.info())
 			elif data == 'stop':
