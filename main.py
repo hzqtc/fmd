@@ -36,6 +36,7 @@ class FMDaemon(Daemon):
 			if config.has_section('Behavior'):
 				self.autoplay = config.getboolean('Behavior', 'autoplay')
 		else:
+			print >> sys.stderr, 'Warning: creating default configure file.'
 			config.add_section('DoubanFM')
 			config.set('DoubanFM', 'channel', self.channel)
 			config.set('DoubanFM', 'uid', self.uid)
