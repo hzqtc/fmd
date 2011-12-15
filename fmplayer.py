@@ -32,16 +32,20 @@ class Player(object):
 		self.progress = 0
 		while True:
 			time.sleep(0.2)
+
+			if self.paused or self.stopped:
+				continue
+
 			try:
 				self.progress = self.playbin.query_position(gst.FORMAT_TIME, None)[0] / 1000000000
 				self.length = self.playbin.query_duration(gst.FORMAT_TIME, None)[0] / 1000000000
 			except:
 				continue
+
 			if self.progress >= self.length:
 				if self.on_end:
 					self.current = None
 					self.play(True)
-				break
 
 	def setSong(self, song):
 		self.current = song
