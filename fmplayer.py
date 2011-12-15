@@ -68,7 +68,7 @@ class Player(object):
 
 			last_progress = self.progress
 
-	def setSong(self, song, playlist):
+	def setSong(self, song, playlist = None):
 		if self.current and self.current.sid == song.sid:
 			return
 
