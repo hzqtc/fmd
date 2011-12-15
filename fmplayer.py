@@ -43,14 +43,15 @@ class Player(object):
 				self.progress = self.playbin.query_position(gst.FORMAT_TIME, None)[0] / 1000000000
 				self.length = self.playbin.query_duration(gst.FORMAT_TIME, None)[0] / 1000000000
 			except:
-				pass
+				continue
 
-			if self.progress <= last_progress:
+			if self.progress == last_progress:
 				lag_counter += 1
 			else:
 				lag_counter = 0
 
-			if self.progress >= self.length - 1 or lag_counter > 15:
+			# print("watch: %s : %s | %s" % (self.progress, self.length, lag_counter))
+			if (self.progress >= self.length and self.length > 0) or lag_counter > 15:
 				if self.on_end:
 					lag_counter = 0
 					self.stop()
@@ -64,6 +65,7 @@ class Player(object):
 
 	def setSong(self, song):
 		self.current = song
+
 
 	def download(self, song):
 		filename = self.cache_dir + '%s.mp3' % song.sid
@@ -82,14 +84,18 @@ class Player(object):
 				os.remote(partial)
 
 		# create a friendly symlink to original file
-		album_dir = '%s/[%s] %s/' % (song.artist, song.pubdate, song.album)
+		h = lambda x: x.replace('/', '_').replace('.','_')
+		album_dir = '%s/[%s] %s/' % (
+			h(song.artist), h(song.pubdate), h(song.album))
 		if not os.path.exists(self.cache_dir + album_dir):
 			os.makedirs(self.cache_dir + album_dir)
 
 		# TODO: fetch cover as needed
 
+		print("symlink: " + self.cache_dir + album_dir + h(song.title) + '.mp3')
+
 		os.symlink('../../%s.mp3' % song.sid, 
-			 self.cache_dir + album_dir + song.title + '.mp3')
+			 self.cache_dir + album_dir + h(song.title) + '.mp3')
 
 
 	def cacheFilter(self, song):

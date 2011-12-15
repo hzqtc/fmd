@@ -193,7 +193,8 @@ class FMDaemon(Daemon):
 
 			# execute command(s)
 			response = self.execute(commands, command_list)
-			print("Got response: [[[%s]]]" % response)
+			# print("Response: [[[%s]]]" % response)
+
 			if response:
 				conn.send(response)
 				command_list = None
