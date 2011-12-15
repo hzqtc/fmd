@@ -127,7 +127,7 @@ class FMDaemon(Daemon):
 					song_index = self.playlist.playlist.index(song)
 					response += 'song: %s\n' % song_index
 					response += 'songid: %s\n' % song.sid
-					response += 'time: %s\n' % self.player.length
+					response += 'time: %s:%s\n' % (self.player.progress, self.player.length)
 					response += 'elapsed: %s\n' % self.player.progress
 					response += 'bitrate: 404\n'
 					response += 'audio: 44100::24:2\n'

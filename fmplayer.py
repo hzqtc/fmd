@@ -12,7 +12,7 @@ import urllib
 class Player(object):
 	def __init__(self, on_end = None, use_cache = False):
 		self.current = None
-		self.stopped = False
+		self.stopped = True
 		self.paused = False
 		self.progress = 0
 		self.length = 0
