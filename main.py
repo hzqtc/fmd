@@ -194,7 +194,7 @@ class FMDaemon(Daemon):
 			if not line:
 				break
 
-			cmd, params = (line.strip().lower().split(' ', 1) + [''])[0:2]
+			cmd, params = (line.strip().split(' ', 1) + [''])[0:2]
 			print("%s" % line)
 
 			if cmd == 'command_list_begin':
