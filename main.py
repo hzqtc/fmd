@@ -113,12 +113,10 @@ class FMDaemon(Daemon):
 				pass
 			elif cmd == 'search':
 				field, value = [ x.replace('"', '') for x in params.split('" "', 1) ]
-				print("FV: %s %s"  % (field, value))
 				if field in [ 'album', 'title', 'artist' ]:
 					for song in playlist:
 						if getattr(song, field) == unicode(value, 'UTF-8'):
 							response += song.info()
-				print("Search res:\n%s\n" % response)
 			elif cmd == 'count':
 				# dummy
 				response += "songs: 0\nplaytime: 0\n"

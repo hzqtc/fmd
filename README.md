@@ -42,22 +42,28 @@ In "Behavior" section, there are two config values:
 
 The communication between FMD and clients go throught TCP connection.
 
-The protocol is similar to [MPD Protocol](http://mpd.wikia.com/wiki/MusicPlayerDaemonCommands). Following commands are MPD-compatible:
+The protocol is similar to [MPD Protocol](http://mpd.wikia.com/wiki/MusicPlayerDaemonCommands). Following commands are (partially) MPD-compatible:
 
- * play
- * pause
- * toggle
- * stop
- * next
- * previous
- * ping
- * currentsong
- * seek
- * status
  * close (bye)
  * command\_list\_begin
- * command\_list\_ok\_begin
  * command\_list\_end
+ * command\_list\_ok\_begin
+ * currentsong
+ * listall
+ * listallinfo
+ * next
+ * pause
+ * ping
+ * play
+ * playid
+ * plchanges
+ * previous
+ * search
+ * seek
+ * seekid
+ * status
+ * stop
+ * toggle
 
 FMD also recognizes "ban", "rate", "unrate" and "info", these commands are all self-explained.
 Response to command "info" is a json formmated string.
@@ -70,6 +76,8 @@ You can simplily use `mpc` to control FMD:
     $ mpc pause -p 10098
     $ mpc next -p 10098
     $ mpc prev -p 10098
+
+You can also try other MPD clients, for example, `sonata`.
 
 For commands not provided by `mpc`, you can just use `telnet`:
 
@@ -99,7 +107,7 @@ For commands not provided by `mpc`, you can just use `telnet`:
 
 FMD is written in python2 and depends on `gstreamer0.10-python`. The recommendation is to install all gstreamer components and plugins.
 
-To try FMD, just clone the repository. Run `python2 fmd/main.py start` and try `mpc` or `telnet` example above. You may also interested in [FMC](https://github.com/hzqtc/fmc), a simple CLI client for FMD.
+To try FMD, just clone the repository. Run `python2 fmd/main.py start` and try `mpc`, `sonata` or `telnet` example above. You may also interested in [FMC](https://github.com/hzqtc/fmc), a simple CLI client for FMD.
 
 ## Contribute
 
