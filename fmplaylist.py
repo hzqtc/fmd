@@ -91,6 +91,12 @@ class Playlist(object):
 		self.notifyCallbacks()
 		return self.playlist[self.playing]
 
+	def prev(self):
+		self.playing -= 1
+		if self.playing == -1:
+			self.playing = len(self.playlist) - 1
+		return self.playlist[self.playing]
+
 	def ban(self):
 		if self.playing < 0 or self.playing >= len(self.playlist):
 			return None

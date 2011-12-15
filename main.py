@@ -73,17 +73,8 @@ class FMDaemon(Daemon):
 			elif data == 'stop':
 				self.player.stop()
 				conn.send('OK')
-			elif data == 'skip':
-				song = self.playlist.skip()
-				if song:
-					self.player.stop()
-					self.player.setSong(song)
-					self.player.play()
-					conn.send('OK')
-				else:
-					conn.send('Failed')
-			elif data == 'ban':
-				song = self.playlist.ban()
+			elif data in ['skip', 'next', 'prev', 'ban']
+				song = getattr(self.playlist, data)()
 				if song:
 					self.player.stop()
 					self.player.setSong(song)
@@ -101,10 +92,8 @@ class FMDaemon(Daemon):
 					conn.send('OK')
 				else:
 					conn.send('Failed')
-			elif data == 'info':
-				conn.send(self.player.info())
 			else:
-				conn.send('unknown command: %s' % data)
+				conn.send('unknown command: "%s"' % data)
 			conn.send('\n')
 
 
