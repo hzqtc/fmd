@@ -84,6 +84,10 @@ class FMDaemon(Daemon):
 			# main cmd handler
 			if cmd == 'bye':
 				return None
+			elif cmd in [ 'seekid', 'seek' ]:
+				# FIXME: currently ignore songid
+				offset = int(params.split()[-1].replace('"',''))
+				self.player.seek(offset)
 			elif cmd in [ 'play', 'stop', 'pause' ]:
 				getattr(self.player, cmd)()
 			elif cmd in ['skip', 'next', 'prev', 'ban']:
@@ -111,7 +115,6 @@ class FMDaemon(Daemon):
 				if not getattr(self.playlist, cmd)():
 					ok = False
 			elif cmd == 'status':
-
 				response += 'volume: 100\n'
 				response += 'repeat: 1\n'
 				response += 'random: 1\n'
@@ -123,6 +126,7 @@ class FMDaemon(Daemon):
 				response += 'mixrampdelay: nan\n'
 				response += 'state: %s\n' % self.player.status()
 				song = self.player.current
+
 				if song:
 					song_index = self.playlist.playlist.index(song)
 					response += 'song: %s\n' % song_index

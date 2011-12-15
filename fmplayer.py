@@ -30,8 +30,11 @@ class Player(object):
 
 	def _watch_progress(self):
 		self.progress = 0
+		last_progress = 0
+		lag_counter = 0
+
 		while True:
-			time.sleep(0.2)
+			time.sleep(1)
 
 			if self.paused or self.stopped:
 				continue
@@ -40,12 +43,24 @@ class Player(object):
 				self.progress = self.playbin.query_position(gst.FORMAT_TIME, None)[0] / 1000000000
 				self.length = self.playbin.query_duration(gst.FORMAT_TIME, None)[0] / 1000000000
 			except:
-				continue
+				pass
 
-			if self.progress >= self.length:
+			if self.progress <= last_progress:
+				lag_counter += 1
+			else:
+				lag_counter = 0
+
+			if self.progress >= self.length - 1 or lag_counter > 15:
 				if self.on_end:
+					lag_counter = 0
+					self.stop()
 					self.current = None
 					self.play(True)
+				else:
+					self.stop()
+					self.play(True)
+
+			last_progress = self.progress
 
 	def setSong(self, song):
 		self.current = song
@@ -129,6 +144,14 @@ class Player(object):
 		else:
 			return "play"
 
+	def seek(self, seek_sec):
+		if self.paused or self.stopped:
+			return False
+
+		print("Trying seek: %s" % seek_sec)
+		seek_ns = seek_sec * 1000000000
+		self.playbin.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, seek_ns)
+		return True
 
 	def info(self):
 		if self.stopped:
