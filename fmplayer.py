@@ -12,8 +12,8 @@ import urllib
 class Player(object):
 	def __init__(self, on_end = None, use_cache = False):
 		self.current = None
-		self.playmode = False
-		self.playthread = None
+		self.stopped = False
+		self.paused = False
 		self.progress = 0
 		self.length = 0
 		self.on_end = on_end
@@ -26,11 +26,11 @@ class Player(object):
 			if not os.path.exists(self.cache_dir):
 				os.makedirs(self.cache_dir)
 
-	def _play(self):
-		self.playbin.set_state(gst.STATE_PLAYING)
+		self.watch_thread = thread.start_new_thread(self._watch_progress, ())
+
+	def _watch_progress(self):
 		self.progress = 0
-		threadid = thread.get_ident()
-		while self.playmode and self.playthread == threadid:
+		while True:
 			time.sleep(1)
 			try:
 				self.progress = self.playbin.query_position(gst.FORMAT_TIME, None)[0] / 1000000000
@@ -92,19 +92,40 @@ class Player(object):
 	def play(self):
 		if not self.current and self.on_end:
 			self.setSong(self.on_end())
+
 		if self.current:
 			location = self.cacheFilter(self.current)
 			print("Now playing: " + location)
 			self.playbin.set_property("uri", location)
-			self.playmode = True
-			self.playthread = thread.start_new_thread(self._play, ())
+
+		self.stopped = False
+		self.paused = False
+		self.playbin.set_state(gst.STATE_PLAYING)
+
 
 	def stop(self):
-		self.playmode = False
+		self.stopped = True
+		self.paused = False
 		self.playbin.set_state(gst.STATE_NULL)
 
+
+	def pause(self):
+		self.paused = True
+		self.stopped = False
+		self.playbin.set_state(gst.STATE_PAUSED)
+
+
+	def status(self):
+		if self.paused:
+			return "pause"
+		elif self.stopped:
+			return "stop"
+		else:
+			return "play"
+
+
 	def info(self):
-		if not self.playmode:
+		if self.stopped:
 			return json.dumps({ 'status': 'stopped' })
 		else:
 			return json.dumps({ 'status': 'playing', 'progress': self.progress, 'length': self.length, 'song': self.current.toObj() })

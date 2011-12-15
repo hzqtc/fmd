@@ -63,18 +63,29 @@ class FMDaemon(Daemon):
 	def handle(self, conn):
 		while True:
 			data = conn.recv(1024)
-			data = data.strip().lower()
-			if data == 'bye':
+			[ cmd, params ] = data.strip().lower().split(' ', 1)
+
+			if cmd == 'pause' and ('f' in params) or ('0' in params):
+				cmd = 'play'
+			elif cmd == 'toggle':
+				if self.player.stopped or self.player.paused:
+					cmd = 'play'
+				else:
+					cmd = 'pause'
+			elif cmd == 'previous':
+				cmd = 'prev'
+			elif cmd == 'playlist':
+				cmd = 'playlistinfo'
+
+			# main cmd handler
+			if cmd == 'bye':
 				conn.close()
 				break
-			elif data == 'play':
-				self.player.play()
+			elif cmd in [ 'play', 'stop', 'pause' ]:
+				getattr(self.player, cmd)()
 				conn.send('OK')
-			elif data == 'stop':
-				self.player.stop()
-				conn.send('OK')
-			elif data in ['skip', 'next', 'prev', 'ban']
-				song = getattr(self.playlist, data)()
+			elif cmd in ['skip', 'next', 'prev', 'ban']
+				song = getattr(self.playlist, cmd)()
 				if song:
 					self.player.stop()
 					self.player.setSong(song)
@@ -82,18 +93,22 @@ class FMDaemon(Daemon):
 					conn.send('OK')
 				else:
 					conn.send('Failed')
-			elif data == 'rate':
-				if self.playlist.rate():
+			elif cmd in ['rate', 'unrate']:
+				if getattr(self.playlist, cmd)():
 					conn.send('OK')
 				else:
 					conn.send('Failed')
-			elif data == 'unrate':
-				if self.playlist.unrate():
-					conn.send('OK')
-				else:
-					conn.send('Failed')
+			elif cmd == 'status':
+				conn.send('volume: 1\n')
+				conn.send('repeat: 1\n')
+				conn.send('random: 1\n')
+				conn.send('single: 0\n')
+				conn.send('playlist: 1\n')
+				conn.send('playlistlength: %s\n' % len(self.Playlist.playlist))
+				conn.send('state: %s\n' % self.Player.status())
+				conn.send('OK')
 			else:
-				conn.send('unknown command: "%s"' % data)
+				conn.send('unknown command: "%s"' % cmd)
 			conn.send('\n')
 
 
