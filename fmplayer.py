@@ -56,3 +56,5 @@ class Player(object):
 			return json.dumps({ 'status': 'stopped' })
 		else:
 			return json.dumps({ 'status': 'playing', 'progress': self.progress, 'length': self.length, 'song': self.current.toObj() })
+
+# vim: noet

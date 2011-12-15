@@ -150,3 +150,5 @@ class Playlist(object):
 		url = '%s?%s' % (self.api, urllib.urlencode(params))
 		urllib2.urlopen(url)
 
+
+# vim: noet
