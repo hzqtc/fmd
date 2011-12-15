@@ -2,6 +2,7 @@
 
 import time
 import thread
+import threading
 import json
 import pygst
 pygst.require("0.10")
@@ -27,6 +28,7 @@ class Player(object):
 				os.makedirs(self.cache_dir)
 
 		self.watch_thread = thread.start_new_thread(self._watch_progress, ())
+		self.download_thread_lock = threading.Lock()
 
 	def _watch_progress(self):
 		self.progress = 0
@@ -39,13 +41,13 @@ class Player(object):
 			if self.paused or self.stopped:
 				continue
 
-			try:
+			# try:
 				self.progress = self.playbin.query_position(gst.FORMAT_TIME, None)[0] / 1000000000
 				self.length = self.playbin.query_duration(gst.FORMAT_TIME, None)[0] / 1000000000
-			except:
-				continue
+			# except:
+			# 	pass
 
-			if self.progress == last_progress:
+			if self.progress == last_progress and not self.paused and not self.stopped:
 				lag_counter += 1
 			else:
 				lag_counter = 0
@@ -71,11 +73,16 @@ class Player(object):
 		filename = self.cache_dir + '%s.mp3' % song.sid
 		partial = filename + ".part"
 
-		if os.path.exists(filename) or os.path.exists(partial):
-			return
+		with self.download_thread_lock:
+			try:
+				if os.path.exists(filename) or os.path.exists(partial):
+					return
+				else:
+					open(partial, 'w').close()
+			except:
+				pass
 
 		try:
-			open(partial, 'w').close()
 			print('Retrieving: %s at %s' % (song.title, song.url))
 			urllib.urlretrieve(song.url, partial)
 			os.rename(partial, filename)
