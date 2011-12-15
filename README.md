@@ -72,26 +72,26 @@ You can simplily use `mpc` to control FMD:
 
 For commands not provided by `mpc`, you can just use `telnet`:
 
-       $ python2 fmd/main.py start
-       $ telnet localhost 10098
-       Trying 127.0.0.1...
-       Connected to localhost.
-       Escape character is '^]'.
-       OK MPD 0.11.0 (FMD 0.1)
-       info
-       {"status": "stopped"}
-       play
-       OK
-       info
-       {"status": "playing", "song": {"album": "/subject/1853585/", "picture": "http://img1.douban.com/mpic/s4715464.jpg", "ssid": "5e96", "albumtitl
-       stop
-       OK
-       info
-       {"status": "stopped"}
-       bye
-       OK
-       Connection closed by foreign host.
-       $ python2 fmd/main.py stop
+    $ python2 fmd/main.py start
+    $ telnet localhost 10098
+    Trying 127.0.0.1...
+    Connected to localhost.
+    Escape character is '^]'.
+    OK MPD 0.11.0 (FMD 0.1)
+    info
+    {"status": "stopped"}
+    play
+    OK
+    info
+    {"status": "playing", "song": {"album": "/subject/1853585/", "picture": "http://img1.douban.com/mpic/s4715464.jpg", "ssid": "5e96", "albumtitl
+    stop
+    OK
+    info
+    {"status": "stopped"}
+    bye
+    OK
+    Connection closed by foreign host.
+    $ python2 fmd/main.py stop
 
 
 ## Install
