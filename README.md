@@ -80,3 +80,5 @@ To try FMD, just clone the repository. Run `python2 fmd/main.py start` and try t
 ## Contribute
 
 This project is on its very ealy stage and requires lots of improvements. Any feedbacks, patches, forks and other helps are welcome.
+
+[Quark](https://github.com/quark-zju) has built a more MPD-like and MPD-compatible [fork](https://github.com/quark-zju/fmd).
