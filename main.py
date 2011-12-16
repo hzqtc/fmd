@@ -60,46 +60,32 @@ class FMDaemon(Daemon):
 				conn.close()
 				break
 			elif data == 'play':
-				# stop first if already in play mode
-				if self.player.playmode:
-					self.player.stop()
 				self.player.play()
-				conn.send(self.player.info())
 			elif data == 'stop':
 				self.player.stop()
-				conn.send(self.player.info())
+			elif data == 'pause':
+				self.player.pause()
 			elif data == 'skip':
 				song = self.playlist.skip()
 				if song:
 					self.player.stop()
 					self.player.setSong(song)
 					self.player.play()
-					conn.send(self.player.info())
-				else:
-					conn.send('Not playing')
 			elif data == 'ban':
 				song = self.playlist.ban()
 				if song:
 					self.player.stop()
 					self.player.setSong(song)
 					self.player.play()
-					conn.send(self.player.info())
-				else:
-					conn.send('Not playing')
 			elif data == 'rate':
-				if self.playlist.rate():
-					conn.send(self.player.info())
-				else:
-					conn.send('Not playing')
+				self.playlist.rate()
 			elif data == 'unrate':
-				if self.playlist.unrate():
-					conn.send(self.player.info())
-				else:
-					conn.send('Not playing')
+				self.playlist.unrate()
 			elif data == 'info':
-				conn.send(self.player.info())
+				pass
 			else:
-				conn.send('Unknown command: %s' % data)
+				continue
+			conn.send(self.player.info())
 
 	def run(self):
 		self.readConfig()
