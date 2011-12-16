@@ -43,7 +43,7 @@ The communication between FMD and clients go throught TCP connection.
 
 When client connected, FMD will send a welcome message: "OK FMD [version]".
 
-Commands client can send are "play", "stop", "pause", "skip", "ban", "rate", "unrate", "info" and "bye", these commands are all self-explained.
+Commands client can send are "play", "stop", "pause", "toggle", "skip", "ban", "rate", "unrate", "info" and "bye", these commands are all self-explained.
 
 No response to command "bye". Responses to all other commands are json formmated strings containing current playing infomation.
 
