@@ -3,6 +3,7 @@
 import StringIO
 import urllib
 import urllib2
+import thread
 import json
 
 class Song(object):
@@ -168,18 +169,20 @@ class Playlist(object):
 		self.notifyCallbacks()
 
 	def sendShortReport(self, action):
-		params = {
-			'app_name': self.app_name,
-			'version': self.version,
-			'user_id': self.uid,
-			'expire': self.expire,
-			'token': self.token,
-			'channel': self.channel,
-			'sid': self.playlist[self.playing].sid if self.playing >= 0 else '',
-			'type': action,
-		}
-		url = '%s?%s' % (self.api, urllib.urlencode(params))
-		urllib2.urlopen(url)
+		def sendRequest(self, action):
+			params = {
+				'app_name': self.app_name,
+				'version': self.version,
+				'user_id': self.uid,
+				'expire': self.expire,
+				'token': self.token,
+				'channel': self.channel,
+				'sid': self.playlist[self.playing].sid if self.playing >= 0 else '',
+				'type': action,
+			}
+			url = '%s?%s' % (self.api, urllib.urlencode(params))
+			urllib2.urlopen(url)
+		thread.start_new_thread(sendRequest, (self, action, ))
 
 	def setPlaying(self, song):
 		try:
