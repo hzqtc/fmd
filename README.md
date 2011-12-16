@@ -44,7 +44,24 @@ The communication between FMD and clients go throught TCP connection.
 When client connected, FMD will send a welcome message: "OK FMD [version]".
 
 Commands client can send are "play", "stop", "pause", "skip", "ban", "rate", "unrate", "info" and "bye", these commands are all self-explained.
-Response to command "info" is a json formmated string. No response to command "bye". Response to all other commands are "OK" when command execution finished.
+
+No response to command "bye". Responses to all other commands are json formmated strings containing current playing infomation.
+
+	{
+	   "status" : "playing"
+	   "length" : 270,
+	   "progress" : 81,
+	   "song" : {
+		  "like" : false,
+		  "cover" : "http://img3.douban.com/mpic/s2969627.jpg",
+		  "artist" : "Colbie Caillat",
+		  "album" : "Coco",
+		  "pubdate" : "2007",
+		  "url" : "http://mr3.douban.com/201112170002/40b00ce527d7b6fa364830caf93c7137/view/song/small/p736376.mp3",
+		  "title" : "Tailor Made"
+	   },
+	}
+
 
 The simplest FMD client is telnet:
 
@@ -59,15 +76,10 @@ The simplest FMD client is telnet:
 	info
 	{"status": "stopped"}
 	play
-	OK
-	info
 	{"status": "playing", "song": {"album": "/subject/1853585/", "picture": "http://img1.douban.com/mpic/s4715464.jpg", "ssid": "5e96", "albumtitle": "FutureSex/LoveSounds", "url": "http://mr3.douban.com/201112111834/ffe796f3e845701dbd7fe595e19c9eda/view/song/small/p468936.mp3", "company": "Jive", "artist": "Justin Timberlake", "rating_avg": 4.09556, "length": 432, "subtype": "", "public_time": "2006", "aid": "1853585", "sid": "468936", "title": "Sexyback", "like": "0"}}
 	stop
-	OK
-	info
 	{"status": "stopped"}
 	bye
-	OK
 	Connection closed by foreign host.
 	$ python2 fmd/main.py stop
 
