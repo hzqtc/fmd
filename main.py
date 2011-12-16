@@ -65,6 +65,11 @@ class FMDaemon(Daemon):
 				self.player.stop()
 			elif data == 'pause':
 				self.player.pause()
+			elif data == 'toggle':
+				if self.player.playing:
+					self.player.pause()
+				else:
+					self.player.play()
 			elif data == 'skip':
 				song = self.playlist.skip()
 				if song:

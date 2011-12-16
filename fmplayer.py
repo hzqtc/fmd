@@ -53,7 +53,7 @@ class Player(object):
 		self.playing = False
 		self.progress = self.length = 0
 		self.playbin.set_state(gst.STATE_NULL)
-	
+
 	def pause(self):
 		self.playing = False
 		self.playbin.set_state(gst.STATE_PAUSED)
