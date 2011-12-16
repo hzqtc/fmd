@@ -104,7 +104,7 @@ class Player(object):
 		album_dir = '%s/[%s] %s/' % (
 			h(song.artist), h(song.pubdate), h(song.album))
 		if not os.path.exists(self.cache_dir + album_dir):
-			os.makedirs(self.cache_dir + album_dir)
+			os.makedirs((self.cache_dir + album_dir), 0755)
 
 		# TODO: fetch cover as needed
 
