@@ -177,7 +177,7 @@ class Playlist(object):
 				'expire': self.expire,
 				'token': self.token,
 				'channel': self.channel,
-				'sid': self.playlist[self.playing].sid if self.playing >= 0 else '',
+				'sid': self.playlist[self.playing].sid
 				'type': action,
 			}
 			url = '%s?%s' % (self.api, urllib.urlencode(params))
