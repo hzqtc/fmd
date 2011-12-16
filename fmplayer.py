@@ -25,7 +25,7 @@ class Player(object):
 		self.cache_dir = os.path.expanduser('~/.cache/douban.fm/')
 		if self.use_cache:
 			if not os.path.exists(self.cache_dir):
-				os.makedirs(self.cache_dir)
+				os.makedirs(self.cache_dir, 0755)
 
 		self.watch_thread = thread.start_new_thread(self._watch_progress, ())
 		self.download_thread_lock = threading.Lock()
@@ -94,13 +94,20 @@ class Player(object):
 		try:
 			print('Retrieving: %s at %s' % (song.title, song.url))
 			urllib.urlretrieve(song.url, partial)
-			os.rename(partial, filename)
 		except:
 			if os.path.exists(partial):
-				os.remote(partial)
+				os.remove(partial)
+				return
+
+		# verify mp3 file, file too small should not be valid mp3
+		if os.path.getsize(partial) < 60000:
+			os.remove(partial)
+			return
+		else:
+			os.rename(partial, filename)
 
 		# create a friendly symlink to original file
-		h = lambda x: x.replace('/', '_').replace('.','_')
+		h = lambda x: x.replace('/', '_').replace('.','').strip()
 		album_dir = '%s/[%s] %s/' % (
 			h(song.artist), h(song.pubdate), h(song.album))
 		if not os.path.exists(self.cache_dir + album_dir):
@@ -108,7 +115,6 @@ class Player(object):
 
 		# TODO: fetch cover as needed
 
-		# TODO: verify mp3 file
 		print("symlink: " + self.cache_dir + album_dir + h(song.title) + '.mp3')
 
 		os.symlink('../../%s.mp3' % song.sid, 
