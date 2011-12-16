@@ -108,6 +108,7 @@ class Player(object):
 
 		# TODO: fetch cover as needed
 
+		# TODO: verify mp3 file
 		print("symlink: " + self.cache_dir + album_dir + h(song.title) + '.mp3')
 
 		os.symlink('../../%s.mp3' % song.sid, 

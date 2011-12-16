@@ -81,6 +81,10 @@ You can also try other MPD clients, for example, `sonata`.
 
 ![Sonata](http://p.twimg.com/AgvMGieCMAE5F8E.png)
 
+NOTE: sonata will disable playback control when playlist is empty and 
+sonata will NOT update playlist automatically, you may want to make sure
+playlist is not empty by `mpc play`.
+
 For commands not provided by `mpc`, you can just use `telnet`:
 
     $ python2 fmd/main.py start
