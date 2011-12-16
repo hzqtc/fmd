@@ -79,11 +79,13 @@ You can simplily use `mpc` to control FMD:
 
 You can also try other MPD clients, for example, `sonata`.
 
-![Sonata](http://p.twimg.com/AgvMGieCMAE5F8E.png)
-
-NOTE: sonata will disable playback control when playlist is empty and 
+NOTE: sonata will disable playback controls when playlist is empty and 
 sonata will NOT update playlist automatically, you may want to make sure
-playlist is not empty by `mpc play`.
+playlist is not empty by playing something using `mpc play`. Currently, to get
+playlist refreshed, you may need restart sonata manually. Playback controls and
+seek should work regardless of playlist.
+
+![Sonata](http://p.twimg.com/AgvMGieCMAE5F8E.png)
 
 For commands not provided by `mpc`, you can just use `telnet`:
 
@@ -98,7 +100,7 @@ For commands not provided by `mpc`, you can just use `telnet`:
     play
     OK
     info
-    {"status": "playing", "song": {"album": "/subject/1853585/", "picture": "http://img1.douban.com/mpic/s4715464.jpg", "ssid": "5e96", "albumtitl
+    {"status": "playing", "song": {"album": "/subject/1853585/", "picture": "http://img1.douban.com/mpic/s4715464.jpg", "ssid": "5e96", ....
     stop
     OK
     info
