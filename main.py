@@ -196,7 +196,10 @@ class FMDaemon(Daemon):
 				break
 
 			cmd, params = (line.strip().split(' ', 1) + [''])[0:2]
-			print("%s" % line)
+
+			# for debugging, but do not show commands used too frequently
+			if not line in [ 'currentsong', 'status' ]:
+				print("%s" % line)
 
 			if cmd == 'command_list_begin':
 				command_list = 'list'
