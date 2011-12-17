@@ -115,7 +115,7 @@ class FMDaemon(Daemon):
 				field, value = [ x.replace('"', '') for x in params.split('" "', 1) ]
 				if field in [ 'album', 'title', 'artist' ]:
 					for song in playlist:
-						if getattr(song, field) == unicode(value, 'UTF-8'):
+						if unicode(value, 'UTF-8') in getattr(song, field):
 							response += song.info()
 			elif cmd == 'count':
 				# dummy
