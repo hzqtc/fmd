@@ -145,9 +145,11 @@ class Player(object):
 			location = self.cacheFilter(self.current)
 			print("Now playing: " + location)
 			self.playbin.set_property("uri", location)
+			self.length = 0
 
 		if rewind:
 			self.playbin.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, 0)
+			self.progress = 0
 
 		self.stopped = False
 		self.paused = False
@@ -175,13 +177,19 @@ class Player(object):
 			return "play"
 
 	def seek(self, seek_sec):
-		if self.paused or self.stopped:
+		if self.stopped:
 			return False
 
-		print("Trying seek: %s" % seek_sec)
-		seek_ns = seek_sec * 1000000000
-		self.playbin.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, seek_ns)
-		return True
+		if seek_sec < self.length:
+			self.progress = seek_sec
+			seek_ns = seek_sec * 1000000000
+			self.playbin.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, seek_ns)
+			if self.paused:
+				self.paused = False
+				self.playbin.set_state(gst.STATE_PLAYING)
+			return True
+		else:
+			return False
 
 	def info(self):
 		if self.stopped:
