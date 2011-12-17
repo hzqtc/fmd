@@ -192,6 +192,7 @@ class FMDaemon(Daemon):
 					line += char
 
 			if not line:
+				conn.close()
 				break
 
 			cmd, params = (line.strip().split(' ', 1) + [''])[0:2]
