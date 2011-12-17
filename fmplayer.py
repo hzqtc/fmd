@@ -56,15 +56,16 @@ class Player(object):
 			# state = self.playbin.get_state()[1]
 			# print("watch: %s : %s | %s | %s" % (self.progress, self.length, lag_counter, state))
 
-			if (self.progress >= self.length and self.length > 0) or lag_counter > 30:
+			if (self.progress >= self.length and self.progress > 0) or lag_counter > 30:
+				self.progress = 0
+				self.length = 0
+				lag_counter = 0
+
 				if self.on_end:
-					lag_counter = 0
-					self.stop()
 					self.current = None
-					self.play(True)
-				else:
-					self.stop()
-					self.play(True)
+
+				self.stop()
+				self.play(True)
 
 			last_progress = self.progress
 
