@@ -67,7 +67,13 @@ class Player(object):
 					self.current = None
 
 				self.stop()
-				self.play(True)
+
+				try:
+					# watch progress must not crash
+					self.play(True)
+				except:
+					time.sleep(10)
+					pass
 
 			last_progress = self.progress
 
