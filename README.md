@@ -82,7 +82,7 @@ You can simplily use `mpc` to control FMD:
 
 For commands not provided by official `mpc` such as `rate`, `ban`. You can
 source `mpc_wrapper.sh` and `mpc` should transparently support these commands
-(![socat](http://www.dest-unreach.org/socat/) is required):
+([socat](http://www.dest-unreach.org/socat/) is required):
 
     $ . /path/to/fmd/mpc_wrapper.sh
     $ mpc rate
