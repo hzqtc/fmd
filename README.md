@@ -65,50 +65,48 @@ The protocol is similar to [MPD Protocol](http://mpd.wikia.com/wiki/MusicPlayerD
  * stop
  * toggle
 
-FMD also recognizes "ban", "rate", "unrate" and "info", these commands are all self-explained.
-Response to command "info" is a json formmated string.
+FMD also recognizes "ban", "rate", "unrate" and "skip", these commands are all self-explained.
 
-You can simplily use `mpc` to control FMD:
+## Usage
+
+To start FMD:
 
 	$ python2 fmd/main.py start
+
+You can simplily use `mpc` to control FMD:
 
     $ mpc play
     $ mpc pause
     $ mpc next
     $ mpc prev
 
-You can also try other MPD clients, for example, `sonata`.
+For commands not provided by official `mpc` such as `rate`, `ban`. You can
+source `mpc_wrapper.sh` and `mpc` should transparently support these commands
+(![socat](http://www.dest-unreach.org/socat/) is required):
 
-NOTE: sonata will disable playback controls when playlist is empty and 
-sonata will NOT update playlist automatically, you may want to make sure
-playlist is not empty by playing something using `mpc play`. Currently, to get
-playlist refreshed, you may need restart sonata manually. Playback controls and
-seek should work regardless of playlist.
+    $ . /path/to/fmd/mpc_wrapper.sh
+    $ mpc rate
+    OK
 
-![Sonata](http://p.twimg.com/AgvMGieCMAE5F8E.png)
+Or use `telnet` if you are an advanced user:
 
-For commands not provided by `mpc`, you can just use `telnet`:
-
-    $ python2 fmd/main.py start
     $ telnet localhost 6600
     Trying 127.0.0.1...
     Connected to localhost.
     Escape character is '^]'.
     OK MPD 0.11.0 (FMD 0.1)
-    info
-    {"status": "stopped"}
-    play
+    skip
     OK
-    info
-    {"status": "playing", "song": {"album": "/subject/1853585/", "picture": "http://img1.douban.com/mpic/s4715464.jpg", "ssid": "5e96", ....
-    stop
-    OK
-    info
-    {"status": "stopped"}
-    bye
-    OK
-    Connection closed by foreign host.
-    $ python2 fmd/main.py stop
+
+You can also try other MPD clients, for example, `sonata`.
+
+NOTE: sonata will disable playback controls when playlist is empty and 
+sonata will NOT update playlist automatically. You may want to make sure
+playlist is not empty by playing something using `mpc play`. Currently, to get
+playlist refreshed, you may need restart sonata manually. Playback controls and
+seek should work regardless of playlist.
+
+![Sonata](http://p.twimg.com/AgvMGieCMAE5F8E.png)
 
 
 ## Install
