@@ -31,7 +31,7 @@ Replace "[email]" and "[passwd]" with your douban account and password.
 In "Server" section, there are two config values:
 
 	addr [string]   # FMD bind addr, default to "localhost"
-	port [int]      # FMD listen port, default to 10098, which is the combination of two ascii code 'd' and 'b'
+	port [int]      # FMD listen port, default to 6600, which is the same as MPD
 
 In "Behavior" section, there are two config values:
 
@@ -72,10 +72,10 @@ You can simplily use `mpc` to control FMD:
 
 	$ python2 fmd/main.py start
 
-    $ mpc play -p 10098
-    $ mpc pause -p 10098
-    $ mpc next -p 10098
-    $ mpc prev -p 10098
+    $ mpc play
+    $ mpc pause
+    $ mpc next
+    $ mpc prev
 
 You can also try other MPD clients, for example, `sonata`.
 
@@ -90,7 +90,7 @@ seek should work regardless of playlist.
 For commands not provided by `mpc`, you can just use `telnet`:
 
     $ python2 fmd/main.py start
-    $ telnet localhost 10098
+    $ telnet localhost 6600
     Trying 127.0.0.1...
     Connected to localhost.
     Escape character is '^]'.

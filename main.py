@@ -19,7 +19,7 @@ class FMDaemon(Daemon):
 		self.token = ''
 		self.expire = ''
 		self.addr = 'localhost'
-		self.port = 10098
+		self.port = 6600
 		self.autoplay = False
 		self.cache = True
 
