@@ -29,7 +29,7 @@ class Player(object):
 				self.progress = self.playbin.query_position(gst.FORMAT_TIME, None)[0] / 1000000000
 				self.length = self.playbin.query_duration(gst.FORMAT_TIME, None)[0] / 1000000000
 			except:
-				continue
+				pass
 
 			# playback stop, add lag counter
 			if self.progress == last_progress:
@@ -38,7 +38,8 @@ class Player(object):
 				lag = 0
 
 			# at end of the stream or lag more than 5 seconds
-			if self.progress >= self.length or lag >= 5:
+			if (self.progress > 0 and self.progress >= self.length) or lag >= 5:
+				lag = 0
 				self.stop()
 				# get next song if self.on_end is not None
 				if self.on_end:
