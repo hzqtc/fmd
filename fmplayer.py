@@ -17,8 +17,6 @@ class Player(object):
 		thread.start_new_thread(self._loop, ())
 
 	def _loop(self):
-		last_progress = 0
-		lag = 0
 		while True:
 			time.sleep(1)
 
@@ -31,22 +29,11 @@ class Player(object):
 			except:
 				pass
 
-			# playback stop, add lag counter
-			if self.progress == last_progress:
-				lag += 1
-			else:
-				lag = 0
-
-			# at end of the stream or lag more than 5 seconds
-			if (self.progress > 0 and self.progress >= self.length) or lag >= 5:
-				lag = 0
+			if self.progress > 0 and self.progress >= self.length:
 				self.stop()
-				# get next song if self.on_end is not None
 				if self.on_end:
 					self.setSong(self.on_end())
 				self.play()
-
-			last_progress = self.progress
 
 	def setSong(self, song):
 		self.current = song
