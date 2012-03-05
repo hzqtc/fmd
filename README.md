@@ -89,6 +89,8 @@ FMD is written in python2 and depends on `gstreamer0.10-python`. The recommendat
 
 To try FMD, just clone the repository. Run `python2 fmd/main.py start` and try the telnet example above. You may also interested in [FMC](https://github.com/hzqtc/fmc), a simple CLI client for FMD.
 
+FMD can be installed as service on Ubuntu by script `install.ubuntu.sh`. The FMD service automatically starts on system boots up. The service is run by root, so it reads configuration file from `/root/.fmd.conf`.
+
 ## Contribute
 
 This project is on its very ealy stage and requires lots of improvements. Any feedbacks, patches, forks and other helps are welcome.
