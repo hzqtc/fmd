@@ -9,7 +9,7 @@
 #include <string.h>
 #include <errno.h>
 
-static int fm_server_setup(fm_server_t *server)
+int fm_server_setup(fm_server_t *server)
 {
     struct addrinfo hints, *results, *p;
 
@@ -85,11 +85,6 @@ void fm_server_run(fm_server_t *server, server_handle handle, void *handle_data)
     char output_buf[1024];
     int buf_size;
     fd_set read_fds;
-
-    if (fm_server_setup(server) < 0) {
-        perror("setup");
-        return;
-    }
 
     while (!server->should_quit) {
         read_fds = server->fds;

@@ -134,6 +134,8 @@ void daemonize(const char *lock_file, const char *log_file, const char *err_file
         exit(0);
     }
 
+    chdir("/");
+
     close(STDIN_FILENO);
     close(STDOUT_FILENO);
     close(STDERR_FILENO);
@@ -182,8 +184,6 @@ int main(int argc, char *argv[])
     strcpy(lock_file, pwd->pw_dir);
     strcat(lock_file, "/.fmd/fmd.lock");
 
-    daemonize(lock_file, log_file, err_file);
-
     int c;
     while ((c = getopt(argc, argv, "a:p:")) != -1) {
         switch (c) {
@@ -199,7 +199,10 @@ int main(int argc, char *argv[])
     }
 
     fm_player_init();
-    fm_player_open(&app.player);
+    if (fm_player_open(&app.player) < 0) {
+        perror("open audio output");
+        return 1;
+    }
     fm_playlist_init(&app.playlist);
 
     int player_end_sig = SIGUSR1;
@@ -219,6 +222,12 @@ int main(int argc, char *argv[])
     };
     fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
     
+    if (fm_server_setup(&app.server) < 0) {
+        perror("setup server");
+        return 1;
+    }
+    printf("Daemonize...\n");
+    daemonize(lock_file, log_file, err_file);
     fm_server_run(&app.server, app_client_handler, &app);
 
     fm_playlist_cleanup(&app.playlist);

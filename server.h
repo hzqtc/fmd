@@ -16,6 +16,7 @@ typedef struct {
 
 typedef void (*server_handle)(void *ptr, const char *input, char *output);
 
+int fm_server_setup(fm_server_t *server);
 void fm_server_run(fm_server_t *server, server_handle handle, void *handle_data);
 
 #endif

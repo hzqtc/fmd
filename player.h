@@ -53,7 +53,7 @@ void fm_player_pause(fm_player_t *pl);
 void fm_player_toggle(fm_player_t *pl);
 void fm_player_stop(fm_player_t *pl);
 
-void fm_player_open(fm_player_t *pl);
+int fm_player_open(fm_player_t *pl);
 void fm_player_close(fm_player_t *pl);
 void fm_player_init();
 void fm_player_exit();

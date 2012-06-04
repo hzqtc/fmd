@@ -42,7 +42,7 @@ Change the config values as described above.
 
 The communication between FMD and clients go throught TCP connection.
 
-Commands client can send are "play", "stop", "pause", "toggle", "skip", "ban", "rate", "unrate", "info" and "end", these commands are all self-explained. Only notice that "end" will tell FMD to quit and close all client connections.
+Commands client can send are "play", "stop", "pause", "toggle", "skip", "ban", "rate", "unrate", and "info", these commands are all self-explained.
 
 No response to command "end". Responses to all other commands are json formmated strings containing current playing infomation.
 
@@ -78,8 +78,6 @@ The simplest FMD client is telnet:
     {"status":"play","channel":0,"user":"小强","title":"What's My Name (Intro #1)","artist":"Rihanna / Drake", "album":"Promo Only Rhythm...","year":2010,"cover":"http://img1.douban.com/mpic/s4615061.jpg","url":"/subject/5951920/","sid":1561924,"like":0,"pos":111,"len":254}
     help
     {"status":"error","message":"wrong command: help"}
-    end
-    Connection closed by foreign host.
 
 
 ## Install

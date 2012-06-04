@@ -23,11 +23,10 @@ static void* download_thread(void *data)
     fm_player_t *pl = (fm_player_t*) data;
 
     curl_easy_perform(pl->curl);
+    pthread_cond_signal(&pl->cond_play);
 
     mpg123_set_filesize(pl->mh, pl->info.file_size);
     pl->info.samples = mpg123_length(pl->mh);
-
-    pthread_cond_signal(&pl->cond_play);
 
     return pl;
 }
@@ -53,32 +52,35 @@ static void* play_thread(void *data)
         }
 
         err = mpg123_decode_frame(pl->mh, &off, &audio, &size);
-        if (err == MPG123_OK) {
-            ao_play(pl->dev, (char*) audio, size);
-        }
-        else if (err == MPG123_NEED_MORE) {
-            if (pthread_kill(pl->tid_dl, 0) == 0) {
-                pthread_mutex_lock(&pl->mutex_status);
-                pthread_cond_wait(&pl->cond_play, &pl->mutex_status);
-                pthread_mutex_unlock(&pl->mutex_status);
-            }
-            else if (pl->tid_ack >= 0) {
-                pthread_kill(pl->tid_ack, pl->sig_ack);
+        switch (err) {
+            case MPG123_OK:
+                ao_play(pl->dev, (char*) audio, size);
                 break;
-            }
-        }
-        else if (err == MPG123_NEW_FORMAT ) {
-            ;
-        }
-        else {
-            fprintf(stderr, "mpg123 deocde return: %d\n", err);
+            case MPG123_NEED_MORE:
+                if (pthread_kill(pl->tid_dl, 0) == 0) {
+                    pthread_mutex_lock(&pl->mutex_status);
+                    pthread_cond_wait(&pl->cond_play, &pl->mutex_status);
+                    pthread_mutex_unlock(&pl->mutex_status);
+                }
+                else {
+                    if (pl->tid_ack >= 0) {
+                        pthread_kill(pl->tid_ack, pl->sig_ack);
+                    }
+                    return pl;
+                }
+                break;
+            case MPG123_NEW_FORMAT:
+                break;
+            default:
+                fprintf(stderr, "mpg123 deocde return: %d\n", err);
+                break;
         }
     }
 
     return pl;
 }
 
-void fm_player_open(fm_player_t *pl)
+int fm_player_open(fm_player_t *pl)
 {
     pl->format.rate = 44100;
     pl->format.channels = 2;
@@ -94,11 +96,16 @@ void fm_player_open(fm_player_t *pl)
     format.bits = mpg123_encsize(pl->format.encoding) * 8;
     format.byte_format = AO_FMT_NATIVE;
     format.matrix = 0;
+
+    int driver = ao_driver_id("alsa");
+    ao_info *driver_info = ao_driver_info(driver);
+    printf("Audio Driver: %s\n", driver_info->name);
     ao_option *options = NULL;
     ao_append_option(&options, "dev", "default");
-    int driver = ao_driver_id("alsa");
     pl->dev = ao_open_live(driver, &format, options);
     ao_free_options(options);
+    if (pl->dev == NULL)
+        return -1;
 
     pl->curl = curl_easy_init();
     curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, download_callback);
@@ -110,6 +117,8 @@ void fm_player_open(fm_player_t *pl)
     pthread_cond_init(&pl->cond_play, NULL);
 
     pl->status = FM_PLAYER_STOP;
+
+    return 0;
 }
 
 void fm_player_close(fm_player_t *pl)
@@ -185,16 +194,16 @@ void fm_player_toggle(fm_player_t *pl)
 
 void fm_player_stop(fm_player_t *pl)
 {
-    pthread_mutex_lock(&pl->mutex_status);
-    pl->status = FM_PLAYER_STOP;
-    pthread_mutex_unlock(&pl->mutex_status);
-    pthread_cond_signal(&pl->cond_play);
+    if (pl->status != FM_PLAYER_STOP) {
+        pthread_mutex_lock(&pl->mutex_status);
+        pl->status = FM_PLAYER_STOP;
+        pthread_mutex_unlock(&pl->mutex_status);
+        pthread_cond_signal(&pl->cond_play);
 
-    pthread_cancel(pl->tid_dl);
-    pthread_cancel(pl->tid_play);
-    pthread_join(pl->tid_dl, NULL);
-    pthread_join(pl->tid_play, NULL);
-    mpg123_close(pl->mh);
+        pthread_join(pl->tid_dl, NULL);
+        pthread_join(pl->tid_play, NULL);
+        mpg123_close(pl->mh);
+    }
 }
 
 void fm_player_init()
