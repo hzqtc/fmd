@@ -42,7 +42,7 @@ void get_fm_info(fm_app_t *app, char *output)
                     "\"cover\":\"%s\",\"url\":\"%s\",\"sid\":%d,"
                     "\"like\":%d,\"pos\":%d,\"len\":%d}",
                     app->player.status == FM_PLAYER_PLAY? "play": "pause",
-                    app->playlist.channel, app->playlist.uname,
+                    app->playlist.config.channel, app->playlist.config.uname,
                     current->title, current->artist, current->album,
                     current->pubdate, current->cover, current->url,
                     current->sid, current->like, fm_player_pos(&app->player),
@@ -50,17 +50,11 @@ void get_fm_info(fm_app_t *app, char *output)
             break;
         case FM_PLAYER_STOP:
             sprintf(output, "{\"status\":\"stop\",\"channel\":%d,\"user\":\"%s\"}",
-                    app->playlist.channel, app->playlist.uname);
+                    app->playlist.config.channel, app->playlist.config.uname);
             break;
         default:
             break;
     }
-}
-
-void player_end_handler(int sig)
-{
-    fm_player_set_url(&app.player, fm_playlist_next(&app.playlist)->audio);
-    fm_player_play(&app.player);
 }
 
 void app_client_handler(void *ptr, const char *input, char *output)
@@ -114,7 +108,7 @@ void app_client_handler(void *ptr, const char *input, char *output)
     }
 }
 
-void daemonize(const char *lock_file, const char *log_file, const char *err_file)
+void daemonize(const char *log_file, const char *err_file)
 {
     pid_t pid;
     int fd0, fd1, fd2;
@@ -151,12 +145,23 @@ void daemonize(const char *lock_file, const char *log_file, const char *err_file
 
     setvbuf(stdout, NULL, _IOLBF, 0);
     setvbuf(stderr, NULL, _IOLBF, 0);
+}
 
-    lock_fd = open(lock_file, O_RDWR | O_CREAT, FILE_MODE);
-    if (lockf(lock_fd, F_TLOCK, 0) < 0) {
-        fprintf(stderr, "failed to lock file\n");
-        exit(1);
-    }
+void player_end_handler(int sig)
+{
+    fm_player_set_url(&app.player, fm_playlist_next(&app.playlist)->audio);
+    fm_player_play(&app.player);
+}
+
+void install_player_end_handler(fm_player_t *player)
+{
+    int player_end_sig = SIGUSR1;
+    struct sigaction player_end_act;
+    player_end_act.sa_handler = player_end_handler;
+    sigemptyset(&player_end_act.sa_mask);
+    player_end_act.sa_flags = 0;
+    sigaction(player_end_sig, &player_end_act, NULL);
+    fm_player_set_ack(player, pthread_self(), player_end_sig);
 }
 
 int main(int argc, char *argv[])
@@ -166,7 +171,6 @@ int main(int argc, char *argv[])
     char config_file[sysconf(LOGIN_NAME_MAX) + 20];
     char log_file[sysconf(LOGIN_NAME_MAX) + 20];
     char err_file[sysconf(LOGIN_NAME_MAX) + 20];
-    char lock_file[sysconf(LOGIN_NAME_MAX) + 20];
 
     strcpy(fmd_dir, pwd->pw_dir);
     strcat(fmd_dir, "/.fmd");
@@ -180,9 +184,6 @@ int main(int argc, char *argv[])
 
     strcpy(err_file, pwd->pw_dir);
     strcat(err_file, "/.fmd/fmd.err");
-
-    strcpy(lock_file, pwd->pw_dir);
-    strcat(lock_file, "/.fmd/fmd.lock");
 
     int c;
     while ((c = getopt(argc, argv, "a:p:")) != -1) {
@@ -198,36 +199,44 @@ int main(int argc, char *argv[])
         }
     }
 
+    fm_playlist_config_t playlist_conf = {
+        .channel = 1,
+        .uid = 0,
+        .uname = "",
+        .token = "",
+        .expire = 0
+    };
+    fm_player_config_t player_conf = {
+        .rate = 44100,
+        .channels = 2,
+        .encoding = MPG123_ENC_SIGNED_16,
+        .driver = "alsa",
+        .dev = "default"
+    };
+    fm_config_t configs[] = {
+        { .type = FM_CONFIG_INT, .section = "DoubanFM", .key = "channel", .val.i = &playlist_conf.channel },
+        { .type = FM_CONFIG_INT, .section = "DoubanFM", .key = "uid", .val.i = &playlist_conf.uid },
+        { .type = FM_CONFIG_STR, .section = "DoubanFM", .key = "uname", .val.s = playlist_conf.uname },
+        { .type = FM_CONFIG_STR, .section = "DoubanFM", .key = "token", .val.s = playlist_conf.token },
+        { .type = FM_CONFIG_INT, .section = "DoubanFM", .key = "expire", .val.i = &playlist_conf.expire },
+        { .type = FM_CONFIG_STR, .section = "Output", .key = "driver", .val.s = player_conf.driver },
+        { .type = FM_CONFIG_STR, .section = "Output", .key = "device", .val.s = player_conf.dev }
+    };
+    fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
+
     fm_player_init();
-    if (fm_player_open(&app.player) < 0) {
+    if (fm_player_open(&app.player, &player_conf) < 0) {
         perror("open audio output");
         return 1;
     }
-    fm_playlist_init(&app.playlist);
-
-    int player_end_sig = SIGUSR1;
-    struct sigaction player_end_act;
-    player_end_act.sa_handler = player_end_handler;
-    sigemptyset(&player_end_act.sa_mask);
-    player_end_act.sa_flags = 0;
-    sigaction(player_end_sig, &player_end_act, NULL);
-    fm_player_set_ack(&app.player, pthread_self(), player_end_sig);
-
-    fm_config_t configs[] = {
-        { .type = FM_CONFIG_INT, .section = "DoubanFM", .key = "channel", .val.i = &app.playlist.channel },
-        { .type = FM_CONFIG_INT, .section = "DoubanFM", .key = "uid", .val.i = &app.playlist.uid },
-        { .type = FM_CONFIG_STR, .section = "DoubanFM", .key = "uname", .val.s = app.playlist.uname },
-        { .type = FM_CONFIG_STR, .section = "DoubanFM", .key = "token", .val.s = app.playlist.token },
-        { .type = FM_CONFIG_INT, .section = "DoubanFM", .key = "expire", .val.i = &app.playlist.expire }
-    };
-    fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
+    install_player_end_handler(&app.player);
+    fm_playlist_init(&app.playlist, &playlist_conf);
     
     if (fm_server_setup(&app.server) < 0) {
         perror("setup server");
         return 1;
     }
-    printf("Daemonize...\n");
-    daemonize(lock_file, log_file, err_file);
+    daemonize(log_file, err_file);
     fm_server_run(&app.server, app_client_handler, &app);
 
     fm_playlist_cleanup(&app.playlist);

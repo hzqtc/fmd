@@ -137,7 +137,7 @@ static void fm_playlist_parse_json(fm_playlist_t *pl, struct json_object *obj)
     json_object_put(obj);
 }
 
-void fm_playlist_init(fm_playlist_t *pl)
+void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config)
 {
     pl->history = NULL;
     pl->playlist = NULL;
@@ -146,11 +146,8 @@ void fm_playlist_init(fm_playlist_t *pl)
     pl->channel_api = "http://www.douban.com/j/app/radio/channels";
     pl->app_name = "radio_desktop_win";
     pl->version = "100";
-    pl->channel = 1;
-    pl->uid = 0;
-    memset(pl->uname, 0, sizeof(pl->uname));
-    memset(pl->token, 0, sizeof(pl->token));
-    pl->expire = 0;
+
+    pl->config = *config;
     
     pl->curl = curl_easy_init();
 }
@@ -182,7 +179,7 @@ static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int s
     static buffer_t curl_buffer;
     char url[1024];
     sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c&h=%s",
-            pl->api, pl->app_name, pl->version, pl->uid, pl->expire, pl->token, pl->channel,
+            pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
             sid, act, fm_playlist_history_str(pl));
 
     memset(curl_buffer.data, 0, sizeof(curl_buffer.data));
@@ -200,7 +197,7 @@ static void fm_playlist_send_short_report(fm_playlist_t *pl, int sid, char act)
 {
     char url[1024];
     sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c",
-            pl->api, pl->app_name, pl->version, pl->uid, pl->expire, pl->token, pl->channel,
+            pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
             sid, act);
 
     curl_easy_setopt(pl->curl, CURLOPT_URL, url);

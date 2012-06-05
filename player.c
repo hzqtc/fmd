@@ -80,29 +80,29 @@ static void* play_thread(void *data)
     return pl;
 }
 
-int fm_player_open(fm_player_t *pl)
+int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
 {
-    pl->format.rate = 44100;
-    pl->format.channels = 2;
-    pl->format.encoding = MPG123_ENC_SIGNED_16;
+    pl->config = *config;
 
     pl->mh = mpg123_new(NULL, NULL);
     mpg123_format_none(pl->mh);
-    mpg123_format(pl->mh, pl->format.rate, pl->format.channels, pl->format.encoding);
+    mpg123_format(pl->mh, config->rate, config->channels, config->encoding);
 
-    ao_sample_format format;
-    format.rate = pl->format.rate;
-    format.channels = pl->format.channels;
-    format.bits = mpg123_encsize(pl->format.encoding) * 8;
-    format.byte_format = AO_FMT_NATIVE;
-    format.matrix = 0;
+    ao_sample_format ao_fmt;
+    ao_fmt.rate = config->rate;
+    ao_fmt.channels = config->channels;
+    ao_fmt.bits = mpg123_encsize(config->encoding) * 8;
+    ao_fmt.byte_format = AO_FMT_NATIVE;
+    ao_fmt.matrix = 0;
 
-    int driver = ao_driver_id("alsa");
+    int driver = ao_driver_id(config->driver);
     ao_info *driver_info = ao_driver_info(driver);
     printf("Audio Driver: %s\n", driver_info->name);
     ao_option *options = NULL;
-    ao_append_option(&options, "dev", "default");
-    pl->dev = ao_open_live(driver, &format, options);
+    if (config->dev[0] != '\0') {
+        ao_append_option(&options, "dev", config->dev);
+    }
+    pl->dev = ao_open_live(driver, &ao_fmt, options);
     ao_free_options(options);
     if (pl->dev == NULL)
         return -1;
@@ -151,12 +151,12 @@ void fm_player_set_ack(fm_player_t *pl, pthread_t tid, int sig)
 
 int fm_player_pos(fm_player_t *pl)
 {
-    return mpg123_tell(pl->mh) / pl->format.rate;
+    return mpg123_tell(pl->mh) / pl->config.rate;
 }
 
 int fm_player_length(fm_player_t *pl)
 {
-    return pl->info.samples / pl->format.rate;
+    return pl->info.samples / pl->config.rate;
 }
 
 void fm_player_play(fm_player_t *pl)

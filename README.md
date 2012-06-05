@@ -1,17 +1,18 @@
 # FMD (Douban FM Daemon)
 
-FMD stands for "Douban FM Daemon", inspired by MPD (Music Player Daemon).
+FMD stands for *Douban FM Daemon*, inspired by MPD (Music Player Daemon).
 
-FMD plays music from Douban FM in background and communicate with clients through TCP connection.
+FMD plays music from Douban FM in background and communicate with clients through TCP connections.
 
 ## Config
 
-The main config file is "~/.fmd/fmd.conf". Config file includes one section: "DoubanFM".
+The main config file is `~/.fmd/fmd.conf`. Config file includes two sections: *DoubanFM* and *Output*.
 
-In "DoubanFM" section, there are four config values:
+In *DoubanFM* section, there are five config values:
 
 	channel [int]   # Douban FM Channel id
 	uid [string]    # Douban FM user id
+    uname [string]  # Douban FM user name
 	token [string]  # Douban FM authorization token
 	expire [string] # token expire time
 
@@ -19,13 +20,16 @@ To get a complete channel list, try:
 	
 	wget -q -O - "http://www.douban.com/j/app/radio/channels" | json_pp
 
-Only "channel" is required, others are only necessary when `channel = 0` (Private Channel).
-
-To get your own "uid", "token" and "expire", try:
+To get your own *uid*, *uname*, *token* and *expire*, try:
 
 	wget -q -O - --post-data="email=[email]&password=[passwd]&app_name=radio_desktop_win&version=100" "http://www.douban.com/j/app/login" | json_pp
 
-Replace "[email]" and "[passwd]" with your douban account and password.
+Replace *[email]* and *[passwd]* with your douban account and password.
+
+In *Output* section, there are two config values:
+
+    driver [string] # audio output driver, default is "alsa"
+    device [string] # audio output device, can be omitted
 
 Please create a config file before using FMD. A sample config file is:
 
@@ -36,15 +40,17 @@ Please create a config file before using FMD. A sample config file is:
     token = 1234abcd
     expire = 1345000000
 
-Change the config values as described above.
+    [Output]
+    driver = alsa
+    device = default
 
 ## Protocol
 
 The communication between FMD and clients go throught TCP connection.
 
-Commands client can send are "play", "stop", "pause", "toggle", "skip", "ban", "rate", "unrate", "info" and "end". These commands are all self-explained except "end" will tell FMD server to exit.
+Commands client can send are *play*, *stop*, *pause*, *toggle*, *skip*, *ban*, *rate*, *unrate*, *info* and *end*. These commands are all self-explained except *end* will tell FMD server to exit.
 
-No response to command "end". Responses to all other commands are json formmated strings containing current playing infomation.
+FMD responses to most commands are json formmated strings containing current playing infomation.
 
     {
        "len" : 0,
@@ -83,7 +89,7 @@ The simplest FMD client is telnet:
 
 ## Install
 
-FMD is written in GNU C and depends on `libcurl`, `libjson`, `mpg123`, `libao` and `alsa`.
+FMD is written in GNU C and depends on `libcurl`, `json-c`, `mpg123`, `libao` and `alsa`.
 
 ## Known issues
 

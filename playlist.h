@@ -23,6 +23,14 @@ typedef struct fm_history {
 } fm_history_t;
 
 typedef struct {
+    int channel;
+    int uid;
+    char uname[16];
+    char token[16];
+    int expire;
+} fm_playlist_config_t;
+
+typedef struct {
     fm_history_t *history;
     fm_song_t *playlist;
 
@@ -31,16 +39,12 @@ typedef struct {
     char *app_name;
     char *version;
 
-    int channel;
-    int uid;
-    char uname[16];
-    char token[16];
-    int expire;
+    fm_playlist_config_t config;
 
     CURL* curl;
 } fm_playlist_t;
 
-void fm_playlist_init(fm_playlist_t *pl);
+void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config);
 void fm_playlist_cleanup(fm_playlist_t *pl);
 
 fm_song_t* fm_playlist_current(fm_playlist_t *pl);

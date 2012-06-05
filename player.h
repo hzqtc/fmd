@@ -22,7 +22,9 @@ typedef struct {
     long rate;
     int channels;
     int encoding;
-} fm_player_format_t;
+    char driver[16];
+    char dev[16];
+} fm_player_config_t;
 
 typedef struct fm_player {
     mpg123_handle *mh;
@@ -30,7 +32,7 @@ typedef struct fm_player {
     CURL *curl;
 
     fm_player_info_t info;
-    fm_player_format_t format;
+    fm_player_config_t config;
     enum fm_player_status status;
 
     pthread_t tid_ack;
@@ -53,7 +55,7 @@ void fm_player_pause(fm_player_t *pl);
 void fm_player_toggle(fm_player_t *pl);
 void fm_player_stop(fm_player_t *pl);
 
-int fm_player_open(fm_player_t *pl);
+int fm_player_open(fm_player_t *pl, fm_player_config_t *config);
 void fm_player_close(fm_player_t *pl);
 void fm_player_init();
 void fm_player_exit();
