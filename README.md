@@ -42,7 +42,7 @@ Change the config values as described above.
 
 The communication between FMD and clients go throught TCP connection.
 
-Commands client can send are "play", "stop", "pause", "toggle", "skip", "ban", "rate", "unrate", and "info", these commands are all self-explained.
+Commands client can send are "play", "stop", "pause", "toggle", "skip", "ban", "rate", "unrate", "info" and "end". These commands are all self-explained except "end" will tell FMD server to exit.
 
 No response to command "end". Responses to all other commands are json formmated strings containing current playing infomation.
 
@@ -79,7 +79,12 @@ The simplest FMD client is telnet:
     help
     {"status":"error","message":"wrong command: help"}
 
+[FMC](https://github.com/hzqtc/fmc) is a command line client for FMD.
 
 ## Install
 
 FMD is written in GNU C and depends on `libcurl`, `libjson`, `mpg123`, `libao` and `alsa`.
+
+## Known issues
+
+Sometimes, FMD may use too much CPU. It's a known issue of `libao` and `alsa`. Trying `fmc stop` and `fmc play` may help.
