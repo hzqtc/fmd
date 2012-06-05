@@ -57,51 +57,60 @@ void get_fm_info(fm_app_t *app, char *output)
     }
 }
 
-void app_client_handler(void *ptr, const char *input, char *output)
+void app_client_handler(void *ptr, char *input, char *output)
 {
     fm_app_t *app = (fm_app_t*) ptr;
-    if (strcmp(input, "play") == 0) {
+    char *cmd = input;
+    char *arg = split(input, ' ');
+
+    if (strcmp(cmd, "play") == 0) {
         if (app->player.status == FM_PLAYER_STOP) {
             fm_player_set_url(&app->player, fm_playlist_current(&app->playlist)->audio);
         }
         fm_player_play(&app->player);
         get_fm_info(app, output);
     }
-    else if(strcmp(input, "stop") == 0) {
+    else if(strcmp(cmd, "stop") == 0) {
         fm_player_stop(&app->player);
         get_fm_info(app, output);
     }
-    else if(strcmp(input, "pause") == 0) {
+    else if(strcmp(cmd, "pause") == 0) {
         fm_player_pause(&app->player);
         get_fm_info(app, output);
     }
-    else if(strcmp(input, "toggle") == 0) {
+    else if(strcmp(cmd, "toggle") == 0) {
         fm_player_toggle(&app->player);
         get_fm_info(app, output);
     }
-    else if(strcmp(input, "skip") == 0) {
+    else if(strcmp(cmd, "skip") == 0) {
         fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist)->audio);
         fm_player_play(&app->player);
         get_fm_info(app, output);
     }
-    else if(strcmp(input, "ban") == 0) {
+    else if(strcmp(cmd, "ban") == 0) {
         fm_player_set_url(&app->player, fm_playlist_ban(&app->playlist)->audio);
         fm_player_play(&app->player);
         get_fm_info(app, output);
     }
-    else if(strcmp(input, "rate") == 0) {
+    else if(strcmp(cmd, "rate") == 0) {
         fm_playlist_rate(&app->playlist);
         get_fm_info(app, output);
     }
-    else if(strcmp(input, "unrate") == 0) {
+    else if(strcmp(cmd, "unrate") == 0) {
         fm_playlist_unrate(&app->playlist);
         get_fm_info(app, output);
     }
-    else if(strcmp(input, "info") == 0) {
+    else if(strcmp(cmd, "info") == 0) {
         get_fm_info(app, output);
     }
-    else if(strcmp(input, "end") == 0) {
+    else if(strcmp(cmd, "end") == 0) {
         app->server.should_quit = 1;
+    }
+    else if(strcmp(cmd, "setch") == 0) {
+        app->playlist.config.channel = atoi(arg);
+        fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist)->audio);
+        fm_player_play(&app->player);
+        get_fm_info(app, output);
     }
     else {
         sprintf(output, "{\"status\":\"error\",\"message\":\"wrong command: %s\"}", input);
@@ -112,7 +121,6 @@ void daemonize(const char *log_file, const char *err_file)
 {
     pid_t pid;
     int fd0, fd1, fd2;
-    int lock_fd;
 
     if ((pid = fork()) < 0) {
         perror("fork");
@@ -214,13 +222,48 @@ int main(int argc, char *argv[])
         .dev = "default"
     };
     fm_config_t configs[] = {
-        { .type = FM_CONFIG_INT, .section = "DoubanFM", .key = "channel", .val.i = &playlist_conf.channel },
-        { .type = FM_CONFIG_INT, .section = "DoubanFM", .key = "uid", .val.i = &playlist_conf.uid },
-        { .type = FM_CONFIG_STR, .section = "DoubanFM", .key = "uname", .val.s = playlist_conf.uname },
-        { .type = FM_CONFIG_STR, .section = "DoubanFM", .key = "token", .val.s = playlist_conf.token },
-        { .type = FM_CONFIG_INT, .section = "DoubanFM", .key = "expire", .val.i = &playlist_conf.expire },
-        { .type = FM_CONFIG_STR, .section = "Output", .key = "driver", .val.s = player_conf.driver },
-        { .type = FM_CONFIG_STR, .section = "Output", .key = "device", .val.s = player_conf.dev }
+        {
+            .type = FM_CONFIG_INT,
+            .section = "DoubanFM",
+            .key = "channel",
+            .val.i = &playlist_conf.channel
+        },
+        {
+            .type = FM_CONFIG_INT,
+            .section = "DoubanFM",
+            .key = "uid",
+            .val.i = &playlist_conf.uid
+        },
+        {
+            .type = FM_CONFIG_STR,
+            .section = "DoubanFM",
+            .key = "uname",
+            .val.s = playlist_conf.uname
+        },
+        {
+            .type = FM_CONFIG_STR,
+            .section = "DoubanFM",
+            .key = "token",
+            .val.s = playlist_conf.token
+        },
+        {
+            .type = FM_CONFIG_INT,
+            .section = "DoubanFM",
+            .key = "expire",
+            .val.i = &playlist_conf.expire
+        },
+        {
+            .type = FM_CONFIG_STR,
+            .section = "Output",
+            .key = "driver",
+            .val.s = player_conf.driver
+        },
+        {
+            .type = FM_CONFIG_STR,
+            .section = "Output",
+            .key = "device",
+            .val.s = player_conf.dev
+        }
     };
     fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
 

@@ -2,7 +2,6 @@
 
 #include <ctype.h>
 #include <string.h>
-#include <time.h>
 
 char* trim(char *str)
 {
@@ -38,16 +37,4 @@ char* split(char *str, char delimiter)
         return p + 1;
     }
     return NULL;
-}
-
-const char* time_str()
-{
-    static char buffer[32];
-    time_t t;
-    struct tm *tm_now;
-
-    t = time(NULL);
-    tm_now = localtime(&t);
-    strftime(buffer, sizeof(buffer), "[%F %T]", tm_now);
-    return buffer;
 }
