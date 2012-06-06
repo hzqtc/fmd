@@ -107,10 +107,18 @@ void app_client_handler(void *ptr, char *input, char *output)
         app->server.should_quit = 1;
     }
     else if(strcmp(cmd, "setch") == 0) {
-        app->playlist.config.channel = atoi(arg);
-        fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist)->audio);
-        fm_player_play(&app->player);
-        get_fm_info(app, output);
+        if (arg == NULL) {
+            sprintf(output, "{\"status\":\"error\",\"message\":\"missing argument: %s\"}", input);
+        }
+        else {
+            int ch = atoi(arg);
+            if (ch != app->playlist.config.channel) {
+                app->playlist.config.channel = atoi(arg);
+                fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist)->audio);
+                fm_player_play(&app->player);
+            }
+            get_fm_info(app, output);
+        }
     }
     else {
         sprintf(output, "{\"status\":\"error\",\"message\":\"wrong command: %s\"}", input);
