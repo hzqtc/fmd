@@ -98,6 +98,7 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
     int driver = ao_driver_id(config->driver);
     ao_info *driver_info = ao_driver_info(driver);
     printf("Audio Driver: %s\n", driver_info->name);
+    printf("Sample rate: %d Hz\n", pl->config.rate);
     ao_option *options = NULL;
     if (config->dev[0] != '\0') {
         ao_append_option(&options, "dev", config->dev);

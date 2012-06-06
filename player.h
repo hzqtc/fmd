@@ -19,7 +19,7 @@ typedef struct {
 } fm_player_info_t;
 
 typedef struct {
-    long rate;
+    int rate;
     int channels;
     int encoding;
     char driver[16];

@@ -263,6 +263,12 @@ int main(int argc, char *argv[])
             .section = "Output",
             .key = "device",
             .val.s = player_conf.dev
+        },
+        {
+            .type = FM_CONFIG_INT,
+            .section = "Output",
+            .key = "rate",
+            .val.i = &player_conf.rate
         }
     };
     fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
