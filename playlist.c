@@ -127,6 +127,11 @@ static void fm_playlist_clear(fm_playlist_t *pl)
 static void fm_playlist_parse_json(fm_playlist_t *pl, struct json_object *obj)
 {
     int i;
+    int ret = json_object_get_int(json_object_object_get(obj, "r"));
+    if (ret != 0) {
+        fprintf(stderr, "API error: %s\n", json_object_get_string(json_object_object_get(obj, "err")));
+        exit(ret);
+    }
     array_list *songs = json_object_get_array(json_object_object_get(obj, "song"));
     for (i = songs->length - 1; i >= 0; i--) {
         struct json_object *o = (struct json_object*) array_list_get_idx(songs, i);
