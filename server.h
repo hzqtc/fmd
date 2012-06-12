@@ -4,8 +4,8 @@
 #include <sys/select.h>
 
 typedef struct {
-    char *addr;
-    char *port;
+    char addr[16];
+    char port[8];
     
     int listen_fd;
     fd_set fds;

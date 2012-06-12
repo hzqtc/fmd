@@ -108,7 +108,7 @@ void app_client_handler(void *ptr, char *input, char *output)
     }
     else if(strcmp(cmd, "setch") == 0) {
         if (arg == NULL) {
-            sprintf(output, "{\"status\":\"error\",\"message\":\"missing argument: %s\"}", input);
+            sprintf(output, "{\"status\":\"error\",\"message\":\"Missing argument: %s\"}", input);
         }
         else {
             int ch = atoi(arg);
@@ -121,7 +121,7 @@ void app_client_handler(void *ptr, char *input, char *output)
         }
     }
     else {
-        sprintf(output, "{\"status\":\"error\",\"message\":\"wrong command: %s\"}", input);
+        sprintf(output, "{\"status\":\"error\",\"message\":\"Wrong command: %s\"}", input);
     }
 }
 
@@ -180,7 +180,7 @@ void install_player_end_handler(fm_player_t *player)
     fm_player_set_ack(player, pthread_self(), player_end_sig);
 }
 
-int main(int argc, char *argv[])
+int main()
 {
     struct passwd *pwd = getpwuid(getuid());
     char fmd_dir[sysconf(LOGIN_NAME_MAX) + 20];
@@ -200,20 +200,6 @@ int main(int argc, char *argv[])
 
     strcpy(err_file, pwd->pw_dir);
     strcat(err_file, "/.fmd/fmd.err");
-
-    int c;
-    while ((c = getopt(argc, argv, "a:p:")) != -1) {
-        switch (c) {
-            case 'a':
-                app.server.addr = optarg;
-                break;
-            case 'p':
-                app.server.port = optarg;
-                break;
-            default:
-                break;
-        }
-    }
 
     fm_playlist_config_t playlist_conf = {
         .channel = 1,
@@ -277,20 +263,32 @@ int main(int argc, char *argv[])
             .section = "Output",
             .key = "rate",
             .val.i = &player_conf.rate
+        },
+        {
+            .type = FM_CONFIG_STR,
+            .section = "Server",
+            .key = "address",
+            .val.s = app.server.addr
+        },
+        {
+            .type = FM_CONFIG_STR,
+            .section = "Server",
+            .key = "port",
+            .val.s = app.server.port
         }
     };
     fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
 
     fm_player_init();
     if (fm_player_open(&app.player, &player_conf) < 0) {
-        perror("open audio output");
+        perror("Open audio output");
         return 1;
     }
     install_player_end_handler(&app.player);
     fm_playlist_init(&app.playlist, &playlist_conf);
     
     if (fm_server_setup(&app.server) < 0) {
-        perror("setup server");
+        perror("Server");
         return 1;
     }
     daemonize(log_file, err_file);

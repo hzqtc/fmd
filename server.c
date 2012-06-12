@@ -13,6 +13,8 @@ int fm_server_setup(fm_server_t *server)
 {
     struct addrinfo hints, *results, *p;
 
+    printf("Server listen at %s:%s\n", server->addr, server->port);
+
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
@@ -35,7 +37,7 @@ int fm_server_setup(fm_server_t *server)
     if (p == NULL) {
         return -1;
     }
-    
+
     freeaddrinfo(results);
 
     if (listen(server->listen_fd, 5) < 0) {

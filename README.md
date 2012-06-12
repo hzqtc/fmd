@@ -6,9 +6,9 @@ FMD plays music from Douban FM in background and communicate with clients throug
 
 ## Config
 
-The main config file is `~/.fmd/fmd.conf`. Config file includes two sections: *DoubanFM* and *Output*.
+The main config file is `~/.fmd/fmd.conf`. Config file includes several sections.
 
-In *DoubanFM* section, there are five config values:
+In *DoubanFM* section, there are the following config items:
 
 	channel [int]   # Douban FM Channel id
 	uid [string]    # Douban FM user id
@@ -26,10 +26,16 @@ To get your own *uid*, *uname*, *token* and *expire*, try:
 
 Replace *[email]* and *[passwd]* with your douban account and password.
 
-In *Output* section, there are two config values:
+In *Output* section, there are the following config items:
 
     driver [string] # audio output driver, default is "alsa"
     device [string] # audio output device, can be omitted
+    rate [int]      # audio ouput rate, default to 44100
+
+In *Server* section, there are the following config items:
+
+    address [string]# server listen address, default to "localhost"
+    port [int]      # server listen port, default to 10098
 
 Please create a config file before using FMD. A sample config file is:
 
@@ -43,6 +49,11 @@ Please create a config file before using FMD. A sample config file is:
     [Output]
     driver = alsa
     device = default
+    rate = 44100
+
+    [Server]
+    address = localhost
+    port = 10098
 
 ## Protocol
 
