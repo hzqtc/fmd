@@ -113,7 +113,7 @@ void app_client_handler(void *ptr, char *input, char *output)
         else {
             int ch = atoi(arg);
             if (ch != app->playlist.config.channel) {
-                app->playlist.config.channel = atoi(arg);
+                app->playlist.config.channel = ch;
                 fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist)->audio);
                 fm_player_play(&app->player);
             }

@@ -54,7 +54,7 @@ static void fm_playlist_history_add(fm_playlist_t *pl, fm_song_t *song, char sta
         last = h;
         h = h->next;
     }
-    
+
     if (len < max_hist) {     // append new history item
         h = (fm_history_t*) malloc(sizeof(fm_history_t));
         h->sid = song->sid;
