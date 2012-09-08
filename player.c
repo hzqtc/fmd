@@ -96,6 +96,10 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
     ao_fmt.matrix = 0;
 
     int driver = ao_driver_id(config->driver);
+    if (driver == -1) {
+        return -1;
+    }
+    
     ao_info *driver_info = ao_driver_info(driver);
     printf("Audio Driver: %s\n", driver_info->name);
     printf("Sample rate: %d Hz\n", pl->config.rate);
