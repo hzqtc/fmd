@@ -180,13 +180,37 @@ void install_player_end_handler(fm_player_t *player)
     fm_player_set_ack(player, pthread_self(), player_end_sig);
 }
 
-int main()
+int start_fmd(fm_playlist_config_t *playlist_conf, fm_player_config_t *player_conf)
 {
+    fm_player_init();
+    if (fm_player_open(&app.player, player_conf) < 0) {
+        perror("Open audio output");
+        return 1;
+    }
+    install_player_end_handler(&app.player);
+
+    fm_playlist_init(&app.playlist, playlist_conf);
+    
+    if (fm_server_setup(&app.server) < 0) {
+        perror("Server");
+        return 1;
+    }
+    fm_server_run(&app.server, app_client_handler, &app);
+
+    fm_playlist_cleanup(&app.playlist);
+    fm_player_close(&app.player);
+    fm_player_exit();
+
+    return 0;
+}
+
+int main() {
     struct passwd *pwd = getpwuid(getuid());
-    char fmd_dir[sysconf(LOGIN_NAME_MAX) + 20];
-    char config_file[sysconf(LOGIN_NAME_MAX) + 20];
-    char log_file[sysconf(LOGIN_NAME_MAX) + 20];
-    char err_file[sysconf(LOGIN_NAME_MAX) + 20];
+    const int MAX_DIR_LEN = 128;
+    char fmd_dir[MAX_DIR_LEN];
+    char config_file[MAX_DIR_LEN];
+    char log_file[MAX_DIR_LEN];
+    char err_file[MAX_DIR_LEN];
 
     strcpy(fmd_dir, pwd->pw_dir);
     strcat(fmd_dir, "/.fmd");
@@ -200,6 +224,8 @@ int main()
 
     strcpy(err_file, pwd->pw_dir);
     strcat(err_file, "/.fmd/fmd.err");
+
+    daemonize(log_file, err_file);
 
     fm_playlist_config_t playlist_conf = {
         .channel = 1,
@@ -279,24 +305,5 @@ int main()
     };
     fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
 
-    fm_player_init();
-    if (fm_player_open(&app.player, &player_conf) < 0) {
-        perror("Open audio output");
-        return 1;
-    }
-    install_player_end_handler(&app.player);
-    fm_playlist_init(&app.playlist, &playlist_conf);
-    
-    if (fm_server_setup(&app.server) < 0) {
-        perror("Server");
-        return 1;
-    }
-    daemonize(log_file, err_file);
-    fm_server_run(&app.server, app_client_handler, &app);
-
-    fm_playlist_cleanup(&app.playlist);
-    fm_player_close(&app.player);
-    fm_player_exit();
-
-    return 0;
+    return start_fmd(&playlist_conf, &player_conf);
 }

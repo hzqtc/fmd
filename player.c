@@ -63,7 +63,7 @@ static void* play_thread(void *data)
                     pthread_mutex_unlock(&pl->mutex_status);
                 }
                 else {
-                    if (pl->tid_ack >= 0) {
+                    if (pl->tid_ack > 0) {
                         pthread_kill(pl->tid_ack, pl->sig_ack);
                     }
                     return pl;
@@ -116,7 +116,7 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
     curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, download_callback);
     curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, pl);
 
-    pl->tid_ack = -1;
+    pl->tid_ack = 0;
 
     pthread_mutex_init(&pl->mutex_status, NULL);
     pthread_cond_init(&pl->cond_play, NULL);
