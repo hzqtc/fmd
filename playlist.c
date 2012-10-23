@@ -55,7 +55,7 @@ static void fm_playlist_history_add(fm_playlist_t *pl, fm_song_t *song, char sta
         h = h->next;
     }
 
-    if (len < max_hist) {     // append new history item
+    if (len < max_hist) {   // append new history item
         h = (fm_history_t*) malloc(sizeof(fm_history_t));
         h->sid = song->sid;
         h->state = state;
@@ -153,7 +153,7 @@ void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config)
     pl->version = "100";
 
     pl->config = *config;
-    
+
     pl->curl = curl_easy_init();
 }
 
@@ -183,6 +183,7 @@ static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int s
 {
     static buffer_t curl_buffer;
     char url[1024];
+    printf("Playlist send long report: %d:%c\n", sid, act);
     sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c&h=%s",
             pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
             sid, act, fm_playlist_history_str(pl));
@@ -201,6 +202,7 @@ static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int s
 static void fm_playlist_send_short_report(fm_playlist_t *pl, int sid, char act)
 {
     char url[1024];
+    printf("Playlist send short report: %d:%c\n", sid, act);
     sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c",
             pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
             sid, act);
@@ -222,23 +224,29 @@ fm_song_t* fm_playlist_current(fm_playlist_t *pl)
 fm_song_t* fm_playlist_next(fm_playlist_t *pl)
 {
     int sid = 0;
+    printf("Playlist next song\n");
     if (pl->playlist) {
         sid = pl->playlist->sid;
         fm_playlist_history_add(pl, pl->playlist, 'e');
         fm_playlist_send_short_report(pl, sid, 'e');
 
         fm_song_free(fm_playlist_pop_front(pl));
-        if (pl->playlist == NULL)
+        if (pl->playlist == NULL) {
+            printf("Playlist empty, request more\n");
             fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 'p'));
+        }
     }
-    else
+    else {
+        printf("Playlist init empty, request new\n");
         fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 'n'));
+    }
     return pl->playlist;
 }
 
 fm_song_t* fm_playlist_skip(fm_playlist_t *pl)
 {
     int sid = 0;
+    printf("Playlist skip song\n");
     if (pl->playlist) {
         sid = pl->playlist->sid;
         fm_playlist_history_add(pl, pl->playlist, 's');
@@ -253,6 +261,7 @@ fm_song_t* fm_playlist_skip(fm_playlist_t *pl)
 fm_song_t* fm_playlist_ban(fm_playlist_t *pl)
 {
     int sid = 0;
+    printf("Playlist ban song\n");
     if (pl->playlist) {
         sid = pl->playlist->sid;
         fm_playlist_history_add(pl, pl->playlist, 'b');
@@ -266,6 +275,7 @@ fm_song_t* fm_playlist_ban(fm_playlist_t *pl)
 
 void fm_playlist_rate(fm_playlist_t *pl)
 {
+    printf("Playlist rate song\n");
     if (pl->playlist) {
         pl->playlist->like = 1;
         fm_playlist_send_short_report(pl, pl->playlist->sid, 'r');
@@ -274,6 +284,7 @@ void fm_playlist_rate(fm_playlist_t *pl)
 
 void fm_playlist_unrate(fm_playlist_t *pl)
 {
+    printf("Playlist unrate song\n");
     if (pl->playlist) {
         pl->playlist->like = 0;
         fm_playlist_send_short_report(pl, pl->playlist->sid, 'u');

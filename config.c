@@ -14,7 +14,7 @@ int fm_config_parse(const char *file, fm_config_t *confs, int length)
     char line[max_len * 2];
     FILE* f;
     int i;
-    
+
     if ((f = fopen(file, "r")) == NULL) {
         perror("open config file");
         return -1;
@@ -34,6 +34,7 @@ int fm_config_parse(const char *file, fm_config_t *confs, int length)
             trim(val);
             for (i = 0; i < length; i++) {
                 if (strcmp(confs[i].section, section) == 0 && strcmp(confs[i].key, key) == 0) {
+                    printf("Config %s: %s => %s\n", section, key, val);
                     switch (confs[i].type) {
                         case FM_CONFIG_INT:
                             *confs[i].val.i = atoi(val);

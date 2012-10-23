@@ -3,6 +3,7 @@
 
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -79,6 +80,25 @@ static int send_all(int fd, const char *buf, int buf_size)
     }
 }
 
+static void getPeerInfo(int socket, char *ipstr, int iplen, int *port) {
+    socklen_t len;
+    struct sockaddr_storage addr;
+
+    len = sizeof(addr);
+    getpeername(socket, (struct sockaddr*) &addr, &len);
+
+    if (addr.ss_family == AF_INET) {
+        struct sockaddr_in *s = (struct sockaddr_in *) &addr;
+        *port = ntohs(s->sin_port);
+        inet_ntop(AF_INET, &s->sin_addr, ipstr, iplen);
+    }
+    else {
+        struct sockaddr_in6 *s = (struct sockaddr_in6 *) &addr;
+        *port = ntohs(s->sin6_port);
+        inet_ntop(AF_INET6, &s->sin6_addr, ipstr, iplen);
+    }
+}
+
 void fm_server_run(fm_server_t *server, server_handle handle, void *handle_data)
 {
     int i;
@@ -87,6 +107,8 @@ void fm_server_run(fm_server_t *server, server_handle handle, void *handle_data)
     char output_buf[1024];
     int buf_size;
     fd_set read_fds;
+    char ipstr[INET6_ADDRSTRLEN];
+    int port;
 
     while (!server->should_quit) {
         read_fds = server->fds;
@@ -106,6 +128,8 @@ void fm_server_run(fm_server_t *server, server_handle handle, void *handle_data)
                 perror("accept");
             }
             else {
+                getPeerInfo(client, ipstr, sizeof(ipstr), &port);
+                printf("Server has a new client from %s:%d\n", ipstr, port);
                 FD_SET(client, &server->fds);
                 if (client > server->fd_max) {
                     server->fd_max = client;
@@ -119,11 +143,15 @@ void fm_server_run(fm_server_t *server, server_handle handle, void *handle_data)
                 memset(input_buf, 0, sizeof(input_buf));
                 buf_size = recv(i, input_buf, sizeof(input_buf), 0);
                 if (buf_size == 0) {
+                    getPeerInfo(client, ipstr, sizeof(ipstr), &port);
+                    printf("Server says goodbye to client from %s:%d\n", ipstr, port);
                     close(i);
                     FD_CLR(i, &server->fds);
                 }
                 else if (buf_size > 0) {
                     trim(input_buf);
+                    getPeerInfo(client, ipstr, sizeof(ipstr), &port);
+                    printf("Server receives from client %s:%d => %s\n", ipstr, port, input_buf);
                     memset(output_buf, 0, sizeof(output_buf));
                     handle(handle_data, input_buf, output_buf);
                     buf_size = strlen(output_buf);

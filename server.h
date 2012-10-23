@@ -6,7 +6,7 @@
 typedef struct {
     char addr[16];
     char port[8];
-    
+
     int listen_fd;
     fd_set fds;
     int fd_max;

@@ -99,10 +99,10 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
     if (driver == -1) {
         return -1;
     }
-    
+
     ao_info *driver_info = ao_driver_info(driver);
-    printf("Audio Driver: %s\n", driver_info->name);
-    printf("Sample rate: %d Hz\n", pl->config.rate);
+    printf("Player audio driver: %s\n", driver_info->name);
+    printf("Player sample rate: %d Hz\n", pl->config.rate);
     ao_option *options = NULL;
     if (config->dev[0] != '\0') {
         ao_append_option(&options, "dev", config->dev);
@@ -142,6 +142,7 @@ void fm_player_close(fm_player_t *pl)
 
 void fm_player_set_url(fm_player_t *pl, const char *url)
 {
+    printf("Player set url: %s\n", url);
     if (pl->status != FM_PLAYER_STOP) {
         fm_player_stop(pl);
     }
@@ -166,6 +167,7 @@ int fm_player_length(fm_player_t *pl)
 
 void fm_player_play(fm_player_t *pl)
 {
+    printf("Player play\n");
     if (pl->status == FM_PLAYER_STOP) {
         mpg123_open_feed(pl->mh);
         pl->status = FM_PLAYER_PLAY;
@@ -184,6 +186,7 @@ void fm_player_play(fm_player_t *pl)
 
 void fm_player_pause(fm_player_t *pl)
 {
+    printf("Player pause\n");
     pthread_mutex_lock(&pl->mutex_status);
     pl->status = FM_PLAYER_PAUSE;
     pthread_mutex_unlock(&pl->mutex_status);
@@ -199,6 +202,7 @@ void fm_player_toggle(fm_player_t *pl)
 
 void fm_player_stop(fm_player_t *pl)
 {
+    printf("Player stop\n");
     if (pl->status != FM_PLAYER_STOP) {
         pthread_mutex_lock(&pl->mutex_status);
         pl->status = FM_PLAYER_STOP;

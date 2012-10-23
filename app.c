@@ -151,7 +151,7 @@ void daemonize(const char *log_file, const char *err_file)
     close(STDERR_FILENO);
 
     fd0 = open("/dev/null", O_RDONLY);
-    fd1 = open(log_file, O_WRONLY | O_APPEND | O_CREAT, FILE_MODE);
+    fd1 = open(log_file, O_WRONLY | O_TRUNC | O_CREAT, FILE_MODE);
     fd2 = open(err_file, O_WRONLY | O_TRUNC | O_CREAT, FILE_MODE);
 
     if (fd0 != STDIN_FILENO || fd1 != STDOUT_FILENO || fd2 != STDERR_FILENO) {
@@ -190,7 +190,7 @@ int start_fmd(fm_playlist_config_t *playlist_conf, fm_player_config_t *player_co
     install_player_end_handler(&app.player);
 
     fm_playlist_init(&app.playlist, playlist_conf);
-    
+
     if (fm_server_setup(&app.server) < 0) {
         perror("Server");
         return 1;
