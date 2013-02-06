@@ -11,7 +11,7 @@ int fm_config_parse(const char *file, fm_config_t *confs, int length)
     char section[max_len];
     char key[max_len];
     char val[max_len];
-    char line[max_len * 2];
+    char line[max_len * 4];
     FILE* f;
     int i;
 
@@ -22,6 +22,9 @@ int fm_config_parse(const char *file, fm_config_t *confs, int length)
 
     while (fgets(line, sizeof(line), f) != NULL) {
         trim(line);
+        if (line[0] == '#') {
+            continue;
+        }
         if (line[0] == '[') {
             strcpy(section, line + 1);
             section[strlen(section) - 1] = '\0';
