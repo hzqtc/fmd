@@ -305,5 +305,10 @@ int main() {
     };
     fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
 
+    if (strcmp(player_conf.driver, "pulse") == 0 &&\
+        strcmp(player_conf.dev, "default") == 0) {
+        strcpy(player_conf.dev, "0");
+    }
+
     return start_fmd(&playlist_conf, &player_conf);
 }
