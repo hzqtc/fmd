@@ -17,7 +17,7 @@ In *DoubanFM* section, there are the following config items:
 	expire [string] # token expire time
 
 To get a complete channel list, try:
-	
+
 	wget -q -O - "http://www.douban.com/j/app/radio/channels" | json_pp
 
 To get your own *uid*, *uname*, *token* and *expire*, try:
@@ -54,6 +54,16 @@ Please create a config file before using FMD. A sample config file is:
     [Server]
     address = localhost
     port = 10098
+
+As FMD uses [libao](http://xiph.org/ao) for audio output, users may found it
+useful to refer to [libao's driver
+document](http://www.xiph.org/ao/doc/drivers.html) when deciding which driver to
+use. For example, users of PulseAudio should change the Output section to:
+
+    [Output]
+    driver = pulse
+    device = 0
+    rate = 44100
 
 ## Protocol
 
