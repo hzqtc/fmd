@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+
+    <title>Fmd by hzqtc</title>
+  </head>
+
+  <body>
+
+    <header>
+      <div class="container">
+        <h1>Fmd</h1>
+        <h2>Douban FM Daemon (inspired by Music Player Daemon)</h2>
+
+        <section id="downloads">
+          <a href="https://github.com/hzqtc/fmd/zipball/master" class="btn">Download as .zip</a>
+          <a href="https://github.com/hzqtc/fmd/tarball/master" class="btn">Download as .tar.gz</a>
+          <a href="https://github.com/hzqtc/fmd" class="btn btn-github"><span class="icon"></span>View on GitHub</a>
+        </section>
+      </div>
+    </header>
+
+    <div class="container">
+      <section id="main_content">
+        <h1>FMD (Douban FM Daemon)</h1>
+
+<p>FMD stands for <em>Douban FM Daemon</em>, inspired by MPD (Music Player Daemon).</p>
+
+<p>FMD plays music from Douban FM in background and communicate with clients through TCP connections.</p>
+
+<h2>Config</h2>
+
+<p>The main config file is <code>~/.fmd/fmd.conf</code>. Config file includes several sections.</p>
+
+<p>In <em>DoubanFM</em> section, there are the following config items:</p>
+
+<pre><code>channel [int]   # Douban FM Channel id
+uid [string]    # Douban FM user id
+uname [string]  # Douban FM user name
+token [string]  # Douban FM authorization token
+expire [string] # token expire time
+</code></pre>
+
+<p>To get a complete channel list, try:</p>
+
+<pre><code>wget -q -O - "http://www.douban.com/j/app/radio/channels" | json_pp
+</code></pre>
+
+<p>To get your own <em>uid</em>, <em>uname</em>, <em>token</em> and <em>expire</em>, try:</p>
+
+<pre><code>wget -q -O - --post-data="email=[email]&amp;password=[passwd]&amp;app_name=radio_desktop_win&amp;version=100" "http://www.douban.com/j/app/login" | json_pp
+</code></pre>
+
+<p>Replace <em>[email]</em> and <em>[passwd]</em> with your douban account and password.</p>
+
+<p>In <em>Output</em> section, there are the following config items:</p>
+
+<pre><code>driver [string] # audio output driver, default is "alsa"
+device [string] # audio output device, can be omitted
+rate [int]      # audio ouput rate, default to 44100
+</code></pre>
+
+<p>In <em>Server</em> section, there are the following config items:</p>
+
+<pre><code>address [string]# server listen address, default to "localhost"
+port [int]      # server listen port, default to 10098
+</code></pre>
+
+<p>Please create a config file before using FMD. A sample config file is:</p>
+
+<pre><code>[DoubanFM]
+channel = 0
+uid = 123456
+uname = username
+token = 1234abcd
+expire = 1345000000
+
+[Output]
+driver = alsa
+device = default
+rate = 44100
+
+[Server]
+address = localhost
+port = 10098
+</code></pre>
+
+<p>As FMD uses <a href="http://xiph.org/ao">libao</a> for audio output, users may found it
+useful to refer to <a href="http://www.xiph.org/ao/doc/drivers.html">libao's driver
+document</a> when deciding which driver to
+use. For example, users of PulseAudio should change the Output section to:</p>
+
+<pre><code>[Output]
+driver = pulse
+device = 0
+rate = 44100
+</code></pre>
+
+<h2>Protocol</h2>
+
+<p>The communication between FMD and clients go throught TCP connection.</p>
+
+<p>Commands client can send are <em>play</em>, <em>stop</em>, <em>pause</em>, <em>toggle</em>, <em>skip</em>, <em>ban</em>, <em>rate</em>, <em>unrate</em>, <em>info</em> and <em>end</em>. These commands are all self-explained except <em>end</em> will tell FMD server to exit.</p>
+
+<p>FMD responses to most commands are json formmated strings containing current playing infomation.</p>
+
+<pre><code>{
+   "len" : 0,
+   "sid" : 967698,
+   "status" : "play",
+   "channel" : 0,
+   "like" : 0,
+   "artist" : "花儿乐队",
+   "album" : "幸福的旁边",
+   "cover" : "http://img1.douban.com/mpic/s4433542.jpg",
+   "url" : "/subject/1404476/",
+   "user" : "小强",
+   "pos" : 5,
+   "title" : "别骗我",
+   "year" : 1999
+}
+</code></pre>
+
+<p>The simplest FMD client is telnet:</p>
+
+<pre><code>telnet localhost 10098
+Trying ::1...
+Connection failed: Connection refused
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+info
+{"status":"play","channel":0,"user":"小强","title":"What's My Name (Intro #1)","artist":"Rihanna / Drake", "album":"Promo Only Rhythm...","year":2010,"cover":"http://img1.douban.com/mpic/s4615061.jpg","url":"/subject/5951920/","sid":1561924,"like":0,"pos":107,"len":254}
+toggle
+{"status":"pause","channel":0,"user":"小强","title":"What's My Name (Intro #1)","artist":"Rihanna / Drake", "album":"Promo Only Rhythm...","year":2010,"cover":"http://img1.douban.com/mpic/s4615061.jpg","url":"/subject/5951920/","sid":1561924,"like":0,"pos":111,"len":254}
+toggle
+{"status":"play","channel":0,"user":"小强","title":"What's My Name (Intro #1)","artist":"Rihanna / Drake", "album":"Promo Only Rhythm...","year":2010,"cover":"http://img1.douban.com/mpic/s4615061.jpg","url":"/subject/5951920/","sid":1561924,"like":0,"pos":111,"len":254}
+help
+{"status":"error","message":"wrong command: help"}
+</code></pre>
+
+<p><a href="https://github.com/hzqtc/fmc">FMC</a> is a command line client for FMD.</p>
+
+<h2>Install</h2>
+
+<p>FMD is written in GNU C and depends on <code>libcurl</code>, <code>json-c</code>, <code>mpg123</code>, <code>libao</code> and <code>alsa</code>.</p>
+
+<h2>Known issues</h2>
+
+<p>Sometimes, FMD may use too much CPU. It's a known issue of <code>libao</code> and <code>alsa</code>. Trying <code>fmc stop</code> and <code>fmc play</code> may help.</p>
+
+<h2>Todos</h2>
+
+<ul>
+<li>Add support for DJ channels.</li>
+<li>Add logs.</li>
+<li>Cover more error cases.</li>
+<li>Improve FMD protocol.</li>
+</ul>
+      </section>
+    </div>
+
+    
+  </body>
+</html>
