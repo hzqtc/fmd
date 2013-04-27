@@ -115,10 +115,3 @@ FMD is written in GNU C and depends on `libcurl`, `json-c`, `mpg123`, `libao` an
 ## Known issues
 
 Sometimes, FMD may use too much CPU. It's a known issue of `libao` and `alsa`. Trying `fmc stop` and `fmc play` may help.
-
-## Todos
-
-* Add support for DJ channels.
-* Add logs.
-* Cover more error cases.
-* Improve FMD protocol.
