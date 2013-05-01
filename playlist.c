@@ -132,12 +132,15 @@ static void fm_playlist_parse_json(fm_playlist_t *pl, struct json_object *obj)
         fprintf(stderr, "API error: %s\n", json_object_get_string(json_object_object_get(obj, "err")));
         exit(ret);
     }
+    printf("Playlist parsing new API response\n");
     array_list *songs = json_object_get_array(json_object_object_get(obj, "song"));
     for (i = songs->length - 1; i >= 0; i--) {
         struct json_object *o = (struct json_object*) array_list_get_idx(songs, i);
         fm_song_t *song = fm_song_parse_json(o);
-        if (song)
+        if (song) {
             fm_playlist_push_front(pl, song);
+            printf("Playlist add song %d to the top\n", song->sid);
+        }
     }
     json_object_put(obj);
 }
