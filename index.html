@@ -1,62 +1,44 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
   <head>
-    <meta charset='utf-8'>
+    <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="chrome=1">
-    <meta name="viewport" content="width=640" />
-
-    <link rel="stylesheet" href="stylesheets/core.css" media="screen"/>
-    <link rel="stylesheet" href="stylesheets/mobile.css" media="handheld, only screen and (max-device-width:640px)"/>
-    <link rel="stylesheet" href="stylesheets/pygment_trac.css"/>
-
-    <script type="text/javascript" src="javascripts/modernizr.js"></script>
-    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
-    <script type="text/javascript" src="javascripts/headsmart.min.js"></script>
-    <script type="text/javascript">
-      $(document).ready(function () {
-        $('#main_content').headsmart()
-      })
-    </script>
     <title>Fmd by hzqtc</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <script src="javascripts/scale.fix.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
   </head>
-
   <body>
-    <a id="forkme_banner" href="https://github.com/hzqtc/fmd">View on GitHub</a>
-    <div class="shell">
-
+    <div class="wrapper">
       <header>
-        <span class="ribbon-outer">
-          <span class="ribbon-inner">
-            <h1>Fmd</h1>
-            <h2>Douban FM Daemon (inspired by Music Player Daemon)</h2>
-          </span>
-          <span class="left-tail"></span>
-          <span class="right-tail"></span>
-        </span>
+        <h1 class="header">Fmd</h1>
+        <p class="header">Douban FM Daemon (inspired by Music Player Daemon)</p>
+
+        <ul>
+          <li class="download"><a class="buttons" href="https://github.com/hzqtc/fmd/zipball/master">Download ZIP</a></li>
+          <li class="download"><a class="buttons" href="https://github.com/hzqtc/fmd/tarball/master">Download TAR</a></li>
+          <li><a class="buttons github" href="https://github.com/hzqtc/fmd">View On GitHub</a></li>
+        </ul>
+
+        <p class="header">This project is maintained by <a class="header name" href="https://github.com/hzqtc">hzqtc</a></p>
+
+
       </header>
-
-      <section id="downloads">
-        <span class="inner">
-          <a href="https://github.com/hzqtc/fmd/zipball/master" class="zip"><em>download</em> .ZIP</a><a href="https://github.com/hzqtc/fmd/tarball/master" class="tgz"><em>download</em> .TGZ</a>
-        </span>
-      </section>
-
-
-      <span class="banner-fix"></span>
-
-
-      <section id="main_content">
+      <section>
         <h1>FMD (Douban FM Daemon)</h1>
 
-<p>FMD stands for <em>Douban FM Daemon</em>, inspired by MPD (Music Player Daemon).</p>
-
-<p>FMD plays music from Douban FM in background and communicate with clients through TCP connections.</p>
+<p>FMD stands for Douban FM Daemon, inspired by MPD (Music Player Daemon). FMD plays music from Douban FM in background and communicate with clients through TCP connections.</p>
 
 <h2>Config</h2>
 
 <p>The main config file is <code>~/.fmd/fmd.conf</code>. Config file includes several sections.</p>
 
-<p>In <em>DoubanFM</em> section, there are the following config items:</p>
+<p>In <code>DoubanFM</code> section, there are the following config items:</p>
 
 <pre><code>channel [int]   # Douban FM Channel id
 uid [string]    # Douban FM user id
@@ -70,21 +52,37 @@ expire [string] # token expire time
 <pre><code>wget -q -O - "http://www.douban.com/j/app/radio/channels" | json_pp
 </code></pre>
 
-<p>To get your own <em>uid</em>, <em>uname</em>, <em>token</em> and <em>expire</em>, try:</p>
+<p>To get your own <code>uid</code>, <code>uname</code>, <code>token</code> and <code>expire</code>, try:</p>
 
-<pre><code>wget -q -O - --post-data="email=[email]&amp;password=[passwd]&amp;app_name=radio_desktop_win&amp;version=100" "http://www.douban.com/j/app/login" | json_pp
+<pre><code>wget -q -O - --post-data="email=[email]&amp;password=[passwd]&amp;app_name=radio_desktop_win&amp;version=100" "http://www.douban.com/j/app/login"
 </code></pre>
 
-<p>Replace <em>[email]</em> and <em>[passwd]</em> with your douban account and password.</p>
+<p>Replace <code>[email]</code> and <code>[passwd]</code> with your douban account and password.</p>
 
-<p>In <em>Output</em> section, there are the following config items:</p>
+<p>In <code>Output</code> section, there are the following config items:</p>
 
 <pre><code>driver [string] # audio output driver, default is "alsa"
 device [string] # audio output device, can be omitted
 rate [int]      # audio ouput rate, default to 44100
 </code></pre>
 
-<p>In <em>Server</em> section, there are the following config items:</p>
+<p>As FMD uses <a href="http://xiph.org/ao">libao</a> for audio output, users may found it useful to refer to <a href="http://www.xiph.org/ao/doc/drivers.html">libao's driver document</a> when deciding which driver to use. For example, users of PulseAudio should change the <code>Output</code> section to:</p>
+
+<pre><code>[Output]
+driver = pulse
+device = 0
+rate = 44100
+</code></pre>
+
+<p>And for Mac users:</p>
+
+<pre><code>[Output]
+driver = macosx
+device =
+rate = 44100
+</code></pre>
+
+<p>In <code>Server</code> section, there are the following config items:</p>
 
 <pre><code>address [string]# server listen address, default to "localhost"
 port [int]      # server listen port, default to 10098
@@ -109,24 +107,38 @@ address = localhost
 port = 10098
 </code></pre>
 
-<p>As FMD uses <a href="http://xiph.org/ao">libao</a> for audio output, users may found it
-useful to refer to <a href="http://www.xiph.org/ao/doc/drivers.html">libao's driver
-document</a> when deciding which driver to
-use. For example, users of PulseAudio should change the Output section to:</p>
-
-<pre><code>[Output]
-driver = pulse
-device = 0
-rate = 44100
-</code></pre>
-
-<h2>Protocol</h2>
+<h2>Commands</h2>
 
 <p>The communication between FMD and clients go throught TCP connection.</p>
 
-<p>Commands client can send are <em>play</em>, <em>stop</em>, <em>pause</em>, <em>toggle</em>, <em>skip</em>, <em>ban</em>, <em>rate</em>, <em>unrate</em>, <em>info</em> and <em>end</em>. These commands are all self-explained except <em>end</em> will tell FMD server to exit.</p>
+<p>Commands client can send are <code>play</code>, <code>stop</code>, <code>pause</code>, <code>toggle</code>, <code>skip</code>, <code>ban</code>, <code>rate</code>, <code>unrate</code>, <code>info</code> and <code>end</code>.</p>
 
-<p>FMD responses to most commands are json formmated strings containing current playing infomation.</p>
+<ul>
+<li>
+<code>play</code>: start playing</li>
+<li>
+<code>stop</code>: stop playing, and set play position to 0:00</li>
+<li>
+<code>pause</code>: stop playing</li>
+<li>
+<code>toggle</code>: toggle between playing and pause</li>
+<li>
+<code>skip</code>: skip current song</li>
+<li>
+<code>ban</code>: mark current song as "dislike"</li>
+<li>
+<code>rate</code>: mark current song as "like"</li>
+<li>
+<code>unrate</code>: unmark current song</li>
+<li>
+<code>info</code>: simply get FMD info</li>
+<li>
+<code>end</code>: tell FMD to exit</li>
+</ul><p><strong>Note</strong>: The recommand way to exit FMD is <code>killall fmd</code>. Because the <code>end</code> command must be sent from the client and will left the FMD port in wait-close for several minutes, during which time new FMD instance cannot bind to the port.</p>
+
+<h2>Protocol</h2>
+
+<p>FMD responses to all commands except <code>end</code>, the reponse is a json string containing current FMD infomation.</p>
 
 <pre><code>{
    "len" : 0,
@@ -167,27 +179,20 @@ help
 
 <h2>Install</h2>
 
-<p>FMD is written in GNU C and depends on <code>libcurl</code>, <code>json-c</code>, <code>mpg123</code>, <code>libao</code> and <code>alsa</code>.</p>
+<p>FMD is written in C and depends on <code>libcurl</code> (for api calls and music downloading), <code>json-c</code> (for API parsing), <code>mpg123</code> (for music decoding) and <code>libao</code> (for music playing).</p>
 
-<h2>Known issues</h2>
+<p>Currently, there is no binary distribution for this project. So compile from source is the only option. FMD has been tested on Linux and Mac OS X 10.7.</p>
 
-<p>Sometimes, FMD may use too much CPU. It's a known issue of <code>libao</code> and <code>alsa</code>. Trying <code>fmc stop</code> and <code>fmc play</code> may help.</p>
+<pre><code>git clone https://github.com/hzqtc/fmd.git
+cd fmd
+make release
+</code></pre>
       </section>
-
       <footer>
-        <span class="ribbon-outer">
-          <span class="ribbon-inner">
-            <p>this project by <a href="https://github.com/hzqtc">hzqtc</a> can be found on <a href="https://github.com/hzqtc/fmd">GitHub</a></p>
-          </span>
-          <span class="left-tail"></span>
-          <span class="right-tail"></span>
-        </span>
-        <p>Generated with <a href="http://pages.github.com">GitHub Pages</a> using Merlot</p>
-        <span class="octocat"></span>
+        <p><small>Hosted on <a href="https://pages.github.com">GitHub Pages</a> using the Dinky theme</small></p>
       </footer>
-
     </div>
-
-    
+    <!--[if !IE]><script>fixScale(document);</script><![endif]-->
+		
   </body>
 </html>
