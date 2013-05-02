@@ -79,7 +79,18 @@ void app_client_handler(void *ptr, char *input, char *output)
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "toggle") == 0) {
-        fm_player_toggle(&app->player);
+        switch (app->player.status) {
+            case FM_PLAYER_PLAY:
+                fm_player_pause(&app->player);
+                break;
+            case FM_PLAYER_PAUSE:
+                fm_player_play(&app->player);
+                break;
+            case FM_PLAYER_STOP:
+                fm_player_set_url(&app->player, fm_playlist_current(&app->playlist)->audio);
+                fm_player_play(&app->player);
+                break;
+        }
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "skip") == 0) {

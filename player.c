@@ -192,14 +192,6 @@ void fm_player_pause(fm_player_t *pl)
     pthread_mutex_unlock(&pl->mutex_status);
 }
 
-void fm_player_toggle(fm_player_t *pl)
-{
-    if (pl->status == FM_PLAYER_PLAY)
-        fm_player_pause(pl);
-    else
-        fm_player_play(pl);
-}
-
 void fm_player_stop(fm_player_t *pl)
 {
     printf("Player stop\n");
