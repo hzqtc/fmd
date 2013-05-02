@@ -73,18 +73,18 @@ The communication between FMD and clients go throught TCP connection.
 
 Commands client can send are `play`, `stop`, `pause`, `toggle`, `skip`, `ban`, `rate`, `unrate`, `info` and `end`.
 
-* play: start playing
-* stop: stop playing, and set play position to 0:00
-* pause: stop playing
-* toggle: toggle between playing and pause
-* skip: skip current song
-* ban: mark current song as "dislike"
-* rate: mark current song as "like"
-* unrate: unmark current song
-* info: simply get FMD info
-* end: tell FMD to exit
+* `play`: start playing
+* `stop`: stop playing, and set play position to 0:00
+* `pause`: stop playing
+* `toggle`: toggle between playing and pause
+* `skip`: skip current song
+* `ban`: mark current song as "dislike"
+* `rate`: mark current song as "like"
+* `unrate`: unmark current song
+* `info`: simply get FMD info
+* `end`: tell FMD to exit
 
-**Note**: The recommand way to exit fmd is `killall fmd`. Because `end` command must be sent from the client and will left the FMD port in wait-close for several minutes, during which new FMD instance cannot bind to the port.
+**Note**: The recommand way to exit FMD is `killall fmd`. Because the `end` command must be sent from the client and will left the FMD port in wait-close for several minutes, during which time new FMD instance cannot bind to the port.
 
 ## Protocol
 
@@ -127,4 +127,10 @@ The simplest FMD client is telnet:
 
 ## Install
 
-FMD is written in C and depends on `libcurl` (for api calls and music downloading), `json-c` (for API parsing), `mpg123` (for music decoding) and `libao` (for music playing). Currently, there is no binary distribution for this project. So compile from source is the only option. FMD has been tested on Linux and Mac OS X 10.7.
+FMD is written in C and depends on `libcurl` (for api calls and music downloading), `json-c` (for API parsing), `mpg123` (for music decoding) and `libao` (for music playing).
+
+Currently, there is no binary distribution for this project. So compile from source is the only option. FMD has been tested on Linux and Mac OS X 10.7.
+
+    git clone https://github.com/hzqtc/fmd.git
+    cd fmd
+    make release
