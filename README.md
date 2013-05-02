@@ -1,14 +1,12 @@
 # FMD (Douban FM Daemon)
 
-FMD stands for *Douban FM Daemon*, inspired by MPD (Music Player Daemon).
-
-FMD plays music from Douban FM in background and communicate with clients through TCP connections.
+FMD stands for Douban FM Daemon, inspired by MPD (Music Player Daemon). FMD plays music from Douban FM in background and communicate with clients through TCP connections.
 
 ## Config
 
 The main config file is `~/.fmd/fmd.conf`. Config file includes several sections.
 
-In *DoubanFM* section, there are the following config items:
+In `DoubanFM` section, there are the following config items:
 
 	channel [int]   # Douban FM Channel id
 	uid [string]    # Douban FM user id
@@ -20,19 +18,33 @@ To get a complete channel list, try:
 
 	wget -q -O - "http://www.douban.com/j/app/radio/channels" | json_pp
 
-To get your own *uid*, *uname*, *token* and *expire*, try:
+To get your own `uid`, `uname`, `token` and `expire`, try:
 
-	wget -q -O - --post-data="email=[email]&password=[passwd]&app_name=radio_desktop_win&version=100" "http://www.douban.com/j/app/login" | json_pp
+	wget -q -O - --post-data="email=[email]&password=[passwd]&app_name=radio_desktop_win&version=100" "http://www.douban.com/j/app/login"
 
-Replace *[email]* and *[passwd]* with your douban account and password.
+Replace `[email]` and `[passwd]` with your douban account and password.
 
-In *Output* section, there are the following config items:
+In `Output` section, there are the following config items:
 
     driver [string] # audio output driver, default is "alsa"
     device [string] # audio output device, can be omitted
     rate [int]      # audio ouput rate, default to 44100
 
-In *Server* section, there are the following config items:
+As FMD uses [libao](http://xiph.org/ao) for audio output, users may found it useful to refer to [libao's driver document](http://www.xiph.org/ao/doc/drivers.html) when deciding which driver to use. For example, users of PulseAudio should change the `Output` section to:
+
+    [Output]
+    driver = pulse
+    device = 0
+    rate = 44100
+
+And for Mac users:
+
+    [Output]
+    driver = macosx
+    device =
+    rate = 44100
+
+In `Server` section, there are the following config items:
 
     address [string]# server listen address, default to "localhost"
     port [int]      # server listen port, default to 10098
@@ -55,23 +67,28 @@ Please create a config file before using FMD. A sample config file is:
     address = localhost
     port = 10098
 
-As FMD uses [libao](http://xiph.org/ao) for audio output, users may found it
-useful to refer to [libao's driver
-document](http://www.xiph.org/ao/doc/drivers.html) when deciding which driver to
-use. For example, users of PulseAudio should change the Output section to:
-
-    [Output]
-    driver = pulse
-    device = 0
-    rate = 44100
-
-## Protocol
+## Commands
 
 The communication between FMD and clients go throught TCP connection.
 
-Commands client can send are *play*, *stop*, *pause*, *toggle*, *skip*, *ban*, *rate*, *unrate*, *info* and *end*. These commands are all self-explained except *end* will tell FMD server to exit.
+Commands client can send are `play`, `stop`, `pause`, `toggle`, `skip`, `ban`, `rate`, `unrate`, `info` and `end`.
 
-FMD responses to most commands are json formmated strings containing current playing infomation.
+* play: start playing
+* stop: stop playing, and set play position to 0:00
+* pause: stop playing
+* toggle: toggle between playing and pause
+* skip: skip current song
+* ban: mark current song as "dislike"
+* rate: mark current song as "like"
+* unrate: unmark current song
+* info: simply get FMD info
+* end: tell FMD to exit
+
+**Note**: The recommand way to exit fmd is `killall fmd`. Because `end` command must be sent from the client and will left the FMD port in wait-close for several minutes, during which new FMD instance cannot bind to the port.
+
+## Protocol
+
+FMD responses to all commands except `end`, the reponse is a json string containing current FMD infomation.
 
     {
        "len" : 0,
@@ -110,8 +127,4 @@ The simplest FMD client is telnet:
 
 ## Install
 
-FMD is written in GNU C and depends on `libcurl`, `json-c`, `mpg123`, `libao` and `alsa`.
-
-## Known issues
-
-Sometimes, FMD may use too much CPU. It's a known issue of `libao` and `alsa`. Trying `fmc stop` and `fmc play` may help.
+FMD is written in C and depends on `libcurl` (for api calls and music downloading), `json-c` (for API parsing), `mpg123` (for music decoding) and `libao` (for music playing). Currently, there is no binary distribution for this project. So compile from source is the only option. FMD has been tested on Linux and Mac OS X 10.7.
