@@ -1,0 +1,40 @@
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides:          fmd
+# Required-Start:    $remote_fs $syslog $network $named
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5     
+# Default-Stop:      0 1 6
+# Short-Description: douban.fm deamon
+# Description:       FMD plays music from Douban FM channels in background and
+#                    communicate with clients through (partially) MPD-compatible
+#                    protocol
+### END INIT INFO
+
+N=$0
+
+case "$1" in
+  start)
+    /usr/local/bin/fmd-update-conf.sh > ~/.fmd/fmd.conf
+	/usr/local/bin/fmd
+	sleep 1
+	echo "play" | nc 127.0.0.1 10098
+	;;
+  stop)
+	pkill fmd
+	;;
+  restart)
+	$N stop
+	$N start
+	;;
+  status)
+	ps aux | grep fmd
+	;;
+  *)
+	echo "Usage: $N {start|stop|restart|status}" >&2
+	exit 1
+	;;
+esac
+
+exit 0

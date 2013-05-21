@@ -125,7 +125,7 @@ The simplest FMD client is telnet:
 
 [FMC](https://github.com/hzqtc/fmc) is a command line client for FMD.
 
-## Install
+## Build
 
 FMD is written in C and depends on `libcurl` (for api calls and music downloading), `json-c` (for API parsing), `mpg123` (for music decoding) and `libao` (for music playing).
 
@@ -134,3 +134,16 @@ Currently, there is no binary distribution for this project. So compile from sou
     git clone https://github.com/hzqtc/fmd.git
     cd fmd
     make release
+
+## Run in Linux
+
+To generate you configure file automaticly, change your douban account & password in `fmd-update-conf.sh`, then:
+
+    mkdir -p ~/.fmd
+    ./fmd-update-conf.sh > ~/.fmd/fmd.conf
+
+Even more, to run fmd on boot in Ubuntu (and some other Linux distribution with init.d), run:
+
+    ./install-ubuntu-service.sh
+
+In this way, token will never expire.
