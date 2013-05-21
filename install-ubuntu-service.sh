@@ -2,8 +2,8 @@
 # Install fmd as service on linux.
 
 if [ `id -u` -ne 0 ]; then
-	echo "It must be executed by root."
-	exit 1
+    echo "It must be executed by root."
+    exit 1
 fi
 
 # Copy files into /usr/local/bin/

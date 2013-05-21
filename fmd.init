@@ -8,7 +8,7 @@
 # Default-Stop:      0 1 6
 # Short-Description: douban.fm deamon
 # Description:       FMD plays music from Douban FM channels in background and
-#                    communicate with clients through (partially) PMD-compatible
+#                    communicate with clients through (partially) MPD-compatible
 #                    protocol
 ### END INIT INFO
 

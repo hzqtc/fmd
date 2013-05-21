@@ -135,15 +135,15 @@ Currently, there is no binary distribution for this project. So compile from sou
     cd fmd
     make release
 
-## Run on Linux
+## Run in Linux
 
 To generate you configure file automaticly, change your douban account & password in `fmd-update-conf.sh`, then:
 
     mkdir -p ~/.fmd
     ./fmd-update-conf.sh > ~/.fmd/fmd.conf
 
-Even more, to run fmd on boot, then :
-    
-    ./install.sh
+Even more, to run fmd on boot in Ubuntu (and some other Linux distribution with init.d), run:
 
-In this way, token will not expire.
+    ./install-ubuntu-service.sh
+
+In this way, token will never expire.
