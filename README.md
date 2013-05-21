@@ -125,7 +125,7 @@ The simplest FMD client is telnet:
 
 [FMC](https://github.com/hzqtc/fmc) is a command line client for FMD.
 
-## Build 
+## Build
 
 FMD is written in C and depends on `libcurl` (for api calls and music downloading), `json-c` (for API parsing), `mpg123` (for music decoding) and `libao` (for music playing).
 
