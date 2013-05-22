@@ -4,12 +4,11 @@
 # Provides:          fmd
 # Required-Start:    $remote_fs $syslog $network $named
 # Required-Stop:     $remote_fs $syslog
-# Default-Start:     2 3 4 5     
+# Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
 # Short-Description: douban.fm deamon
-# Description:       FMD plays music from Douban FM channels in background and
-#                    communicate with clients through (partially) MPD-compatible
-#                    protocol
+# Description:       FMD plays music from Douban FM in background and
+#                    communicate with clients through TCP connections.
 ### END INIT INFO
 
 N=$0
