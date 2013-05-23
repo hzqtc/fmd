@@ -13,6 +13,7 @@ In `DoubanFM` section, there are the following config items:
     uname [string]  # Douban FM user name
 	token [string]  # Douban FM authorization token
 	expire [string] # token expire time
+    kbps [int]      # Douban FM bitrate (only applies to Pro user)
 
 To get a complete channel list, try:
 
@@ -57,6 +58,7 @@ Please create a config file before using FMD. A sample config file is:
     uname = username
     token = 1234abcd
     expire = 1345000000
+    kbps = 64
 
     [Output]
     driver = alsa
@@ -71,7 +73,7 @@ Please create a config file before using FMD. A sample config file is:
 
 The communication between FMD and clients go throught TCP connection.
 
-Commands client can send are `play`, `stop`, `pause`, `toggle`, `skip`, `ban`, `rate`, `unrate`, `info` and `end`.
+Commands client can send are `play`, `stop`, `pause`, `toggle`, `skip`, `ban`, `rate`, `unrate`, `info`, `channels`, `setch` and `end`.
 
 * `play`: start playing
 * `stop`: stop playing, and set play position to 0:00
@@ -82,6 +84,8 @@ Commands client can send are `play`, `stop`, `pause`, `toggle`, `skip`, `ban`, `
 * `rate`: mark current song as "like"
 * `unrate`: unmark current song
 * `info`: simply get FMD info
+* `channels`: list available channels
+* `setch`: change channel on the fly
 * `end`: tell FMD to exit
 
 **Note**: The recommand way to exit FMD is `killall fmd`. Because the `end` command must be sent from the client and will left the FMD port in wait-close for several minutes, during which time new FMD instance cannot bind to the port.
