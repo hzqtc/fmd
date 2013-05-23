@@ -285,7 +285,7 @@ int main() {
             .val.i = &playlist_conf.expire
         },
         {
-            .type = FM_CONFIG_INT,
+            .type = FM_CONFIG_STR,
             .section = "DoubanFM",
             .key = "kbps",
             .val.s = playlist_conf.kbps
