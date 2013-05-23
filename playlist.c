@@ -190,6 +190,7 @@ static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int s
     sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c&h=%s",
             pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
             sid, act, fm_playlist_history_str(pl));
+    printf("Playlist request: %s\n", url);
 
     memset(curl_buffer.data, 0, sizeof(curl_buffer.data));
     curl_buffer.length = 0;
@@ -209,6 +210,7 @@ static void fm_playlist_send_short_report(fm_playlist_t *pl, int sid, char act)
     sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c",
             pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
             sid, act);
+    printf("Playlist request: %s\n", url);
 
     curl_easy_setopt(pl->curl, CURLOPT_URL, url);
     curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, drop_buffer);
