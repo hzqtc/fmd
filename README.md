@@ -8,20 +8,24 @@ The main config file is `~/.fmd/fmd.conf`. Config file includes several sections
 
 In `DoubanFM` section, there are the following config items:
 
-	channel [int]   # Douban FM Channel id
-	uid [string]    # Douban FM user id
-    uname [string]  # Douban FM user name
-	token [string]  # Douban FM authorization token
-	expire [string] # token expire time
-    kbps [int]      # Douban FM bitrate (only applies to Pro user)
+    channel [int]       # Douban FM Channel id
+    uid     [string]    # Douban FM user id
+    uname   [string]    # Douban FM user name
+    token   [string]    # Douban FM authorization token
+    expire  [string]    # token expire time
+    kbps    [string]    # Prefered bitrate (only affect pro users)
+
+`kbps` is default to ` ` (empty), [pro users](http://douban.fm/upgrade) can set
+it to `192` to get a better music quality. For non-pro users, any value would be
+ignored and the mp3 bitrate is `64`.
 
 To get a complete channel list, try:
 
-	wget -q -O - "http://www.douban.com/j/app/radio/channels" | json_pp
+    wget -q -O - "http://www.douban.com/j/app/radio/channels" | json_pp
 
 To get your own `uid`, `uname`, `token` and `expire`, try:
 
-	wget -q -O - --post-data="email=[email]&password=[passwd]&app_name=radio_desktop_win&version=100" "http://www.douban.com/j/app/login"
+    wget -q -O - --post-data="email=[email]&password=[passwd]&app_name=radio_desktop_win&version=100" "http://www.douban.com/j/app/login"
 
 Replace `[email]` and `[passwd]` with your douban account and password.
 
@@ -58,7 +62,7 @@ Please create a config file before using FMD. A sample config file is:
     uname = username
     token = 1234abcd
     expire = 1345000000
-    kbps = 64
+    kbps =
 
     [Output]
     driver = alsa

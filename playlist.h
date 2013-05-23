@@ -28,7 +28,7 @@ typedef struct {
     char uname[16];
     char token[16];
     int expire;
-    int kbps;
+    char kbps[8];
 } fm_playlist_config_t;
 
 typedef struct {

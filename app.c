@@ -244,7 +244,7 @@ int main() {
         .uname = "",
         .token = "",
         .expire = 0,
-        .kbps = 64
+        .kbps = ""
     };
     fm_player_config_t player_conf = {
         .rate = 44100,
@@ -288,7 +288,7 @@ int main() {
             .type = FM_CONFIG_INT,
             .section = "DoubanFM",
             .key = "kbps",
-            .val.i = &playlist_conf.kbps
+            .val.s = playlist_conf.kbps
         },
         {
             .type = FM_CONFIG_STR,
