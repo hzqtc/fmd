@@ -9,10 +9,10 @@ The main config file is `~/.fmd/fmd.conf`. Config file includes several sections
 In `DoubanFM` section, there are the following config items:
 
     channel [int]       # Douban FM Channel id
-    uid     [string]    # Douban FM user id
+    uid     [int]       # Douban FM user id
     uname   [string]    # Douban FM user name
     token   [string]    # Douban FM authorization token
-    expire  [string]    # token expire time
+    expire  [int]       # token expire time
     kbps    [string]    # Prefered bitrate (only affect pro users)
 
 `kbps` is default to ` ` (empty), [pro users](http://douban.fm/upgrade) can set
@@ -31,9 +31,9 @@ Replace `[email]` and `[passwd]` with your douban account and password.
 
 In `Output` section, there are the following config items:
 
-    driver [string] # audio output driver, default is "alsa"
-    device [string] # audio output device, can be omitted
-    rate [int]      # audio ouput rate, default to 44100
+    driver  [string]    # audio output driver, default is "alsa"
+    device  [string]    # audio output device, can be omitted
+    rate    [int]       # audio ouput rate, default to 44100
 
 As FMD uses [libao](http://xiph.org/ao) for audio output, users may found it useful to refer to [libao's driver document](http://www.xiph.org/ao/doc/drivers.html) when deciding which driver to use. For example, users of PulseAudio should change the `Output` section to:
 
@@ -51,8 +51,8 @@ And for Mac users:
 
 In `Server` section, there are the following config items:
 
-    address [string]# server listen address, default to "localhost"
-    port [int]      # server listen port, default to 10098
+    address [string]    # server listen address, default to "localhost"
+    port    [string]    # server listen port, default to "10098"
 
 Please create a config file before using FMD. A sample config file is:
 
