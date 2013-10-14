@@ -1,6 +1,5 @@
 #include "server.h"
 #include "player.h"
-#include "playlist.h"
 #include "config.h"
 #include "util.h"
 
@@ -65,7 +64,7 @@ void app_client_handler(void *ptr, char *input, char *output)
 
     if (strcmp(cmd, "play") == 0) {
         if (app->player.status == FM_PLAYER_STOP) {
-            fm_player_set_url(&app->player, fm_playlist_current(&app->playlist)->audio);
+            fm_player_set_url(&app->player, fm_playlist_current(&app->playlist));
         }
         fm_player_play(&app->player);
         get_fm_info(app, output);
@@ -87,28 +86,30 @@ void app_client_handler(void *ptr, char *input, char *output)
                 fm_player_play(&app->player);
                 break;
             case FM_PLAYER_STOP:
-                fm_player_set_url(&app->player, fm_playlist_current(&app->playlist)->audio);
+                fm_player_set_url(&app->player, fm_playlist_current(&app->playlist));
                 fm_player_play(&app->player);
                 break;
         }
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "skip") == 0) {
-        fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist)->audio);
+        fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist));
         fm_player_play(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "ban") == 0) {
-        fm_player_set_url(&app->player, fm_playlist_ban(&app->playlist)->audio);
+        fm_player_set_url(&app->player, fm_playlist_ban(&app->playlist));
         fm_player_play(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "rate") == 0) {
         fm_playlist_rate(&app->playlist);
+        fm_player_download_info_rate(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "unrate") == 0) {
         fm_playlist_unrate(&app->playlist);
+        fm_player_download_info_unrate(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "info") == 0) {
@@ -125,7 +126,7 @@ void app_client_handler(void *ptr, char *input, char *output)
             int ch = atoi(arg);
             if (ch != app->playlist.config.channel) {
                 app->playlist.config.channel = ch;
-                fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist)->audio);
+                fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist));
                 fm_player_play(&app->player);
             }
             get_fm_info(app, output);
@@ -176,7 +177,7 @@ void daemonize(const char *log_file, const char *err_file)
 
 void player_end_handler(int sig)
 {
-    fm_player_set_url(&app.player, fm_playlist_next(&app.playlist)->audio);
+    fm_player_set_url(&app.player, fm_playlist_next(&app.playlist));
     fm_player_play(&app.player);
 }
 
@@ -251,7 +252,9 @@ int main() {
         .channels = 2,
         .encoding = MPG123_ENC_SIGNED_16,
         .driver = "alsa",
-        .dev = "default"
+        .dev = "default",
+        .music_dir = "~/Music",
+        .tmp_dir = "/tmp"
     };
     fm_config_t configs[] = {
         {
@@ -289,6 +292,18 @@ int main() {
             .section = "DoubanFM",
             .key = "kbps",
             .val.s = playlist_conf.kbps
+        },
+        {
+            .type = FM_CONFIG_STR,
+            .section = "Download",
+            .key = "music_dir",
+            .val.s = player_conf.music_dir
+        },
+        {
+            .type = FM_CONFIG_STR,
+            .section = "Download",
+            .key = "tmp_dir",
+            .val.s = player_conf.tmp_dir
         },
         {
             .type = FM_CONFIG_STR,

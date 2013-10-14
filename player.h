@@ -1,6 +1,7 @@
 #ifndef _FM_PLAYER_H_
 #define _FM_PLAYER_H_
 
+#include "playlist.h"
 #include <mpg123.h>
 #include <ao/ao.h>
 #include <curl/curl.h>
@@ -22,14 +23,36 @@ typedef struct {
     int rate;
     int channels;
     int encoding;
+    char music_dir[128];
+    char tmp_dir[128];
     char driver[16];
     char dev[16];
 } fm_player_config_t;
+
+typedef struct {
+    char *title;
+    char *artist;
+    char *album;
+    int pubdate;
+    char *cover;
+    char *url;
+    char *audio;
+    int like;
+
+    // file related action
+    FILE *tmpstream;
+    char *tmpstream_path;
+    char *tmpimage_path;
+    char *music_dir;
+} fm_download_info_t;
 
 typedef struct fm_player {
     mpg123_handle *mh;
     ao_device *dev;
     CURL *curl;
+
+    // encapsulating all the necessary information for downloading purposes
+    fm_download_info_t *download;
 
     fm_player_info_t info;
     fm_player_config_t config;
@@ -44,7 +67,11 @@ typedef struct fm_player {
     pthread_cond_t cond_play;
 } fm_player_t;
 
-void fm_player_set_url(fm_player_t *pl, const char *url);
+// these two methods to transmit rating information to the downloader (determining whether download should be performed)
+void fm_player_download_info_unrate(fm_player_t *pl);
+void fm_player_download_info_rate(fm_player_t *pl);
+
+void fm_player_set_url(fm_player_t *pl, fm_song_t *song);
 void fm_player_set_ack(fm_player_t *pl, pthread_t tid, int sig);
 
 int fm_player_pos(fm_player_t *pl);

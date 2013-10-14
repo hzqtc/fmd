@@ -153,3 +153,17 @@ To generate you configure file automaticly, change your douban account & passwor
 Even more, to run fmd on boot in Ubuntu (and some other Linux distribution with init.d), run as root:
 
     ./install-ubuntu-service.sh
+
+## Music Caching (Only for paid users)
+
+If you are a paid user, you can specify the following values in the config file
+
+    [Download]
+    music_dir = {default value: ~/Music}
+    tmp_dir = {default value: /tmp}
+
+The paths will be expanded according to shell specification.
+
+All liked songs will then be saved to `music_dir` in `artist/song.mp3` format. The ID3 tags will be saved along as well. The cover image, when downloadable, will be downloaded and embedded into the song.
+
+To make sure all the ID3 tags and cover images work you need to have [eyeD3](http://eyed3.nicfit.net/) installed and reachable via `eyeD3` on the command line.
