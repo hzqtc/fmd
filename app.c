@@ -37,14 +37,19 @@ void get_fm_info(fm_app_t *app, char *output)
         case FM_PLAYER_PLAY:
         case FM_PLAYER_PAUSE:
             current = fm_playlist_current(&app->playlist);
+            char btitle[128], bart[128], balb[128], bcover[128], burl[128]; 
             sprintf(output, "{\"status\":\"%s\",\"kbps\":%s,\"channel\":%d,\"user\":\"%s\","
                     "\"title\":\"%s\",\"artist\":\"%s\", \"album\":\"%s\",\"year\":%d,"
                     "\"cover\":\"%s\",\"url\":\"%s\",\"sid\":%d,"
                     "\"like\":%d,\"pos\":%d,\"len\":%d}",
                     app->player.status == FM_PLAYER_PLAY? "play": "pause",
                     current->kbps,app->playlist.config.channel, app->playlist.config.uname,
-                    current->title, current->artist, current->album,
-                    current->pubdate, current->cover, current->url,
+                    escapejson(btitle, current->title), 
+                    escapejson(bart, current->artist), 
+                    escapejson(balb, current->album),
+                    current->pubdate, 
+                    escapejson(bcover, current->cover), 
+                    escapejson(burl, current->url),
                     current->sid, current->like, fm_player_pos(&app->player),
                     fm_player_length(&app->player));
             break;
