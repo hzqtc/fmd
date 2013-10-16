@@ -29,7 +29,7 @@ To make sure all the ID3 tags and cover images work you need to have [eyeD3](htt
 
 ## Local music channel / Red-Heart channel
 
-A new channel with the default name of that of the current user is added. All music files ending with `.mp3` in the `music_dir` specified in the previous section are added randomly to the playlist.
+A new channel with id `999` and default name of that of the current user is added. All music files ending with `.mp3` in the `music_dir` specified in the previous section are added randomly to the playlist.
 
 ### Like
 
