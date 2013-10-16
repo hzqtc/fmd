@@ -1,4 +1,5 @@
 #include "playlist.h"
+#include "util.h"
 
 #include <json/json.h>
 
@@ -206,11 +207,11 @@ static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int s
             case 'b': case 's':
                 printf("Ban / Skip stats feedback not supported for local station to optimize performance\n");
         }
-        char cmd[1024];
+        char cmd[1024], bmd[128];
         sprintf(cmd,
                 "IFS=$'\\n';"
                 "echo -n '{\"r\":0,\"song\":[';"
-                "/home/lingnan/bin/eyeD3f -s, -e'\"' '{{"
+                "eyeD3f -s, -e'\"' '{{"
                 "\"title\":\"{title}\","
                 "\"artist\":\"{artist}\","
                 "\"album\":\"{internet_radio_url}\","
@@ -221,9 +222,9 @@ static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int s
                 "\"like\":1,"
                 "\"sid\":\"%d\","
                 "\"url\":\"file:{path}\""
-                "}}' $(find '%s' -type f -name '*.mp3' | shuf);"
+                "}}' $(find $'%s' -type f -name '*.mp3' | shuf);"
                 "echo -n ']}';"
-                , pl->config.uid, pl->config.music_dir);
+                , pl->config.uid, escapesh(bmd, pl->config.music_dir));
         printf("Cmd is: %s\n", cmd);
         FILE *f = popen(cmd, "r");
         if (f) {

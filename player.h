@@ -36,14 +36,13 @@ typedef struct {
     int pubdate;
     char cover[128];
     char url[128];
-    char audio[128];
+    char audio[256];
     int like;
 
     // file related action
     FILE *tmpstream;
     char tmpstream_path[128];
     char tmpimage_path[128];
-    char music_dir[128];
 } fm_download_info_t;
 
 typedef struct fm_player {

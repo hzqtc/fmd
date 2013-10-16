@@ -38,3 +38,17 @@ char* split(char *str, char delimiter)
     }
     return NULL;
 }
+
+char *escapesh(char *buf, char *str) 
+{
+    int l = strlen(str) + 1;
+    // just needs to loop through and add backslash to the front
+    int i = 0, pi = 0;
+    while (i < l) {
+        char ch = str[i++];
+        if (ch == '\'') 
+            buf[pi++] = '\\';
+        buf[pi++] = ch;
+    }
+    return buf;
+}

@@ -1,4 +1,5 @@
 #include "player.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,7 +35,7 @@ static size_t download_callback(char *ptr, size_t size, size_t nmemb, void *user
         // if the url does not start with file then we can download it
         if (pl->download.tmpstream) {
             fwrite(ptr, size, nmemb, pl->download.tmpstream);
-            printf("Appended transfer of size %d from %s \n", bytes, pl->download.audio);
+            printf("Appended transfer of size %d from %s \n", (int) bytes, pl->download.audio);
         }
 
         mpg123_feed(pl->mh, (unsigned char*) ptr, bytes);
@@ -199,26 +200,31 @@ void fm_player_set_url(fm_player_t *pl, fm_song_t *song)
                 printf("Attemping to mv and tag the file\n");
                 // first move the file to a secure location to avoid it being truncated later
                 char cmd[2048];
+                char btp[128], bart[128], btitle[128], balb[128], bmd[128], btm[128], bcover[128], burl[128]; 
                 sprintf(cmd, 
-                        "src='%s';"
-                        "artist='%s'; title='%s'; album='%s'; date='%d';"
+                        "src=$'%s';"
+                        "artist=$'%s'; title=$'%s'; album=$'%s'; date='%d';"
                         "[[ \"$date\" =~ [0-9]{4} ]] && datearg=\"--release-year $date\" || datearg=;"
-                        "dest=\"%s/${artist//\\//|}/${title//\\//|}.mp3\";"
+                        "dest=$'%s'\"/${artist//\\//|}/${title//\\//|}.mp3\";"
                         "[ -f \"$dest\" ] && exit 0;"
                         "mkdir -p \"$(dirname \"$dest\")\";"
                         "mv -f \"$src\" \"$dest\";" 
-                        "tmpimg='%s'; cover='%s';"
+                        "tmpimg=$'%s'; cover=$'%s';"
                         "(curl --connect-timeout 15 -m 60 -o \"$tmpimg\" \"$cover\";"
                         "([ -f \"$tmpimg\" ] && identify \"$tmpimg\") && cover=\"$tmpimg\" || cover=\"${cover//:/\\:}\";"
-                        "page_url='%s'"
-                        "page_url=\"${page_url//:/\\:}\""
+                        "page_url=$'%s';"
+                        "page_url=\"${page_url//:/\\:}\";"
                         "eyeD3 --artist \"$artist\" --album \"$album\" --title \"$title\" $datearg --add-image \"$cover:FRONT_COVER\" --url-frame \"WORS:$page_url\" \"$dest\";"
                         "rm -f \"$tmpimg\") &", 
-                        pl->download.tmpstream_path, 
-                        pl->download.artist, pl->download.title, pl->download.album, pl->download.pubdate,
-                        pl->download.music_dir,
-                        pl->download.tmpimage_path, pl->download.cover,
-                        pl->download.url);
+                        escapesh(btp, pl->download.tmpstream_path), 
+                        escapesh(bart, pl->download.artist), 
+                        escapesh(btitle, pl->download.title), 
+                        escapesh(balb, pl->download.album), 
+                        pl->download.pubdate,
+                        escapesh(bmd, pl->config.music_dir),
+                        escapesh(btm, pl->download.tmpimage_path), 
+                        escapesh(bcover, pl->download.cover),
+                        escapesh(burl, pl->download.url));
                 printf("Move and tag command: %s\n", cmd);
                 system(cmd);
             }

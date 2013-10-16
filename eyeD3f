@@ -45,29 +45,41 @@ separator = unicode(args.separator)
 for f in args.audiofile:
     # for each specifier
     file = eyed3.load(f)
-    images = file.tag.images
-    comments = file.tag.comments
-    user_url_frames = file.tag.user_url_frames
-    user_text_frames = file.tag.user_text_frames
     path = unicode(os.path.realpath(f.decode('utf-8')))
     kbps = re.findall(r'~(\d+)',file.info.bit_rate_str);
     kbps = kbps[0] if kbps else u"";
+    artist = title = album = track = release_date = publisher = artist_url = audio_source_url = audio_file_url = internet_radio_url = commercial_url = payment_url = publisher_url = copyright_url  = ""
+    if file.tag:
+        artist = file.tag.artist
+        title = file.tag.title
+        album = file.tag.album
+        track = u"%s / %s" % file.tag.track_num
+        release_date = str(file.tag.release_date)
+        publisher = file.tag.publisher
+        artist_url = file.tag.artist_url
+        audio_source_url = file.tag.audio_source_url
+        audio_file_url = file.tag.audio_file_url
+        internet_radio_url = file.tag.internet_radio_url
+        commercial_url = file.tag.commercial_url
+        payment_url = file.tag.payment_url
+        publisher_url = file.tag.publisher_url
+        copyright_url  = file.tag.copyright_url
 
-    reps = {u'artist':file.tag.artist,
-            u'title':file.tag.title,
-            u'album':file.tag.album,
-            u'track':u"%s / %s" % file.tag.track_num,
-            u'release_date':str(file.tag.release_date),
-            u'publisher':file.tag.publisher,
-            u"kbps" : kbps,
-            u'artist_url':file.tag.artist_url,
-            u'audio_source_url':file.tag.audio_source_url,
-            u'audio_file_url':file.tag.audio_file_url,
-            u'internet_radio_url':file.tag.internet_radio_url,
-            u'commercial_url':file.tag.commercial_url,
-            u'payment_url':file.tag.payment_url,
-            u'publisher_url':file.tag.publisher_url,
-            u'copyright_url':file.tag.copyright_url,
+    reps = {u'artist':artist,
+            u'title':title,
+            u'album':album,
+            u'track':track,
+            u'release_date':release_date,
+            u'publisher':publisher,
+            u"kbps":kbps,
+            u'artist_url':artist_url,
+            u'audio_source_url':audio_source_url,
+            u'audio_file_url':audio_file_url,
+            u'internet_radio_url':internet_radio_url,
+            u'commercial_url':commercial_url,
+            u'payment_url':payment_url,
+            u'publisher_url':publisher_url,
+            u'copyright_url':copyright_url,
             u'path':path}
     if to_escape:
         for k in reps:

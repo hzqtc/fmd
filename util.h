@@ -3,5 +3,6 @@
 
 char* trim(char *str);
 char* split(char *str, char delimiter);
+char *escapesh(char *buf, char *str);
 
 #endif

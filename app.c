@@ -157,7 +157,8 @@ void app_client_handler(void *ptr, char *input, char *output)
             case FM_PLAYER_PLAY:
             case FM_PLAYER_PAUSE: {
                 char sh[256];
-                sprintf(sh, "$BROWSER '%s' &", fm_playlist_current(&app->playlist)->url);
+                char url[128];
+                sprintf(sh, "$BROWSER $'%s' &", escapesh(url, fm_playlist_current(&app->playlist)->url));
                 system(sh);
                 break;
             }
