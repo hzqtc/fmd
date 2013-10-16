@@ -1,6 +1,6 @@
 # FMD (Douban FM Daemon)
 
-This is a fork from the original [fmc](https://github.com/hzqtc/fmc). The aim of this fork is to provide more advanced features (mostly for paid users).
+This is a fork from the original [FMD](https://github.com/hzqtc/fmd). The aim of this fork is to provide more advanced features (mostly for paid users).
 
 ## More fine-grained infomation
 
