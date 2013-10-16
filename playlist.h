@@ -2,6 +2,7 @@
 #define _FM_PLAYLIST_H_
 
 #include <curl/curl.h>
+#define local_channel 999
 
 typedef struct fm_song {
     char *title;
@@ -11,6 +12,7 @@ typedef struct fm_song {
     char *cover;
     char *url;
     char *audio;
+    char *kbps;
     int sid;
     int like;
     struct fm_song *next;
@@ -29,6 +31,7 @@ typedef struct {
     char token[16];
     int expire;
     char kbps[8];
+    char music_dir[128];
 } fm_playlist_config_t;
 
 typedef struct {
@@ -50,7 +53,7 @@ void fm_playlist_cleanup(fm_playlist_t *pl);
 
 fm_song_t* fm_playlist_current(fm_playlist_t *pl);
 fm_song_t* fm_playlist_next(fm_playlist_t *pl);
-fm_song_t* fm_playlist_skip(fm_playlist_t *pl);
+fm_song_t* fm_playlist_skip(fm_playlist_t *pl, int force_refresh);
 fm_song_t* fm_playlist_ban(fm_playlist_t *pl);
 
 void fm_playlist_rate(fm_playlist_t *pl);

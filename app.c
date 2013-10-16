@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <pwd.h>
 #include <signal.h>
+#include <wordexp.h>
 
 #define FILE_MODE S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH
 #define DIR_MODE S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH
@@ -36,20 +37,20 @@ void get_fm_info(fm_app_t *app, char *output)
         case FM_PLAYER_PLAY:
         case FM_PLAYER_PAUSE:
             current = fm_playlist_current(&app->playlist);
-            sprintf(output, "{\"status\":\"%s\",\"channel\":%d,\"user\":\"%s\","
+            sprintf(output, "{\"status\":\"%s\",\"kbps\":%s,\"channel\":%d,\"user\":\"%s\","
                     "\"title\":\"%s\",\"artist\":\"%s\", \"album\":\"%s\",\"year\":%d,"
                     "\"cover\":\"%s\",\"url\":\"%s\",\"sid\":%d,"
                     "\"like\":%d,\"pos\":%d,\"len\":%d}",
                     app->player.status == FM_PLAYER_PLAY? "play": "pause",
-                    app->playlist.config.channel, app->playlist.config.uname,
+                    current->kbps,app->playlist.config.channel, app->playlist.config.uname,
                     current->title, current->artist, current->album,
                     current->pubdate, current->cover, current->url,
                     current->sid, current->like, fm_player_pos(&app->player),
                     fm_player_length(&app->player));
             break;
         case FM_PLAYER_STOP:
-            sprintf(output, "{\"status\":\"stop\",\"channel\":%d,\"user\":\"%s\"}",
-                    app->playlist.config.channel, app->playlist.config.uname);
+            sprintf(output, "{\"status\":\"stop\",\"kbps\":%s,\"channel\":%d,\"user\":\"%s\"}",
+                    app->playlist.config.kbps,app->playlist.config.channel, app->playlist.config.uname);
             break;
         default:
             break;
@@ -92,8 +93,8 @@ void app_client_handler(void *ptr, char *input, char *output)
         }
         get_fm_info(app, output);
     }
-    else if(strcmp(cmd, "skip") == 0) {
-        fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist));
+    else if(strcmp(cmd, "skip") == 0 || strcmp(cmd, "next") == 0) {
+        fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0));
         fm_player_play(&app->player);
         get_fm_info(app, output);
     }
@@ -126,14 +127,43 @@ void app_client_handler(void *ptr, char *input, char *output)
             int ch = atoi(arg);
             if (ch != app->playlist.config.channel) {
                 app->playlist.config.channel = ch;
-                fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist));
+                fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 1));
                 fm_player_play(&app->player);
             }
             get_fm_info(app, output);
         }
     }
-    else {
-        sprintf(output, "{\"status\":\"error\",\"message\":\"Wrong command: %s\"}", input);
+    else if(strcmp(cmd, "kbps") == 0) {
+        if (arg == NULL) {
+            sprintf(output, "{\"status\":\"error\",\"message\":\"Missing argument: %s\"}", input);
+        }
+        else if (strcmp(arg, "64") != 0 || strcmp(arg, "128") != 0 || strcmp(arg, "192") != 0) {
+            sprintf(output, "{\"status\":\"error\",\"message\":\"Wrong argument: %s\"}", arg);
+        }
+        else if (app->playlist.config.channel == local_channel) {
+            printf("Switching music quality for local music station is currently not supported (for performance reasons)\n");
+        }
+        else {
+            if (strcmp(arg, app->playlist.config.kbps) != 0) {
+                strcpy(app->playlist.config.kbps, arg);
+                fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0));
+                fm_player_play(&app->player);
+            }
+            get_fm_info(app, output);
+        }
+    }
+    else if(strcmp(cmd, "website") == 0) {
+        switch (app->player.status) {
+            case FM_PLAYER_PLAY:
+            case FM_PLAYER_PAUSE: {
+                char sh[256];
+                sprintf(sh, "$BROWSER '%s' &", fm_playlist_current(&app->playlist)->url);
+                system(sh);
+                break;
+            }
+            default:
+                sprintf(output, "{\"status\":\"error\",\"message\":\"Page information not available\"}");
+        }
     }
 }
 
@@ -297,7 +327,7 @@ int main() {
             .type = FM_CONFIG_STR,
             .section = "Download",
             .key = "music_dir",
-            .val.s = player_conf.music_dir
+            .val.s = playlist_conf.music_dir
         },
         {
             .type = FM_CONFIG_STR,
@@ -338,5 +368,16 @@ int main() {
     };
     fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
 
+    // need to process the directory and pass the arguments into the configs
+    wordexp_t exp_result;
+    wordexp(playlist_conf.music_dir, &exp_result, 0);
+    strcpy(playlist_conf.music_dir, exp_result.we_wordv[0]);
+    strcpy(player_conf.music_dir, exp_result.we_wordv[0]);
+    printf("The music dir path: %s\n", playlist_conf.music_dir);
+
+    wordexp(player_conf.tmp_dir, &exp_result, 0);
+    strcpy(player_conf.tmp_dir, exp_result.we_wordv[0]);
+
+    wordfree(&exp_result);
     return start_fmd(&playlist_conf, &player_conf);
 }

@@ -1,0 +1,84 @@
+#! /usr/bin/env python2
+# -*- coding: utf-8 -*-
+from __future__ import print_function
+import eyed3, os, argparse, re
+
+parser = argparse.ArgumentParser('Return the formatted string containing the ID3 tags of the audio files');
+parser.add_argument('--separator','-s', default='\n', help='define the separator used to append at the end of the output for each file (excluding the last file)');
+parser.add_argument('--escape','-e', default='', help='define the characters that should be escaped in all the output');
+parser.add_argument('format', nargs=1, help='''a format string containing one or more of the following specifiers:
+                                                    , {artist}
+                                                    , {title}
+                                                    , {album}
+                                                    , {track}
+                                                    , {release_date}
+                                                    , {publisher}
+                                                    , {kbps}
+                                                    , {artist_url}
+                                                    , {audio_source_url}
+                                                    , {audio_file_url}
+                                                    , {internet_radio_url}
+                                                    , {commercial_url}
+                                                    , {payment_url}
+                                                    , {publisher_url}
+                                                    , {copyright_url}
+                                                    , {path} (the absolute path of the file)''');
+parser.add_argument('audiofile', nargs='+', help='an audio file containing the ID3 tags');
+
+args = parser.parse_args()
+outputs = []
+formatstr = unicode(args.format[0])
+escapepat = ""
+delimiter = ''
+for c in unicode(args.escape):
+    esc = ''
+    if c in r'()[]\^$.|?*+{}':
+        esc = '\\'
+    escapepat = escapepat + delimiter + esc + c 
+    delimiter = '|'
+to_escape = False
+if escapepat != '':
+    to_escape = True
+    escapepat = '(%s)' % escapepat
+separator = unicode(args.separator)
+
+for f in args.audiofile:
+    # for each specifier
+    file = eyed3.load(f)
+    images = file.tag.images
+    comments = file.tag.comments
+    user_url_frames = file.tag.user_url_frames
+    user_text_frames = file.tag.user_text_frames
+    path = unicode(os.path.realpath(f.decode('utf-8')))
+    kbps = re.findall(r'~(\d+)',file.info.bit_rate_str);
+    kbps = kbps[0] if kbps else u"";
+
+    reps = {u'artist':file.tag.artist,
+            u'title':file.tag.title,
+            u'album':file.tag.album,
+            u'track':u"%s / %s" % file.tag.track_num,
+            u'release_date':str(file.tag.release_date),
+            u'publisher':file.tag.publisher,
+            u"kbps" : kbps,
+            u'artist_url':file.tag.artist_url,
+            u'audio_source_url':file.tag.audio_source_url,
+            u'audio_file_url':file.tag.audio_file_url,
+            u'internet_radio_url':file.tag.internet_radio_url,
+            u'commercial_url':file.tag.commercial_url,
+            u'payment_url':file.tag.payment_url,
+            u'publisher_url':file.tag.publisher_url,
+            u'copyright_url':file.tag.copyright_url,
+            u'path':path}
+    if to_escape:
+        for k in reps:
+            reps[k] = re.sub(escapepat, r'\\\1', u"%s" % reps[k]);
+
+    outputs.append(formatstr.format(**reps))
+
+output = separator.join(outputs).encode('utf-8')
+print(output, end=u'');
+
+
+
+
+

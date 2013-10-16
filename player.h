@@ -30,20 +30,20 @@ typedef struct {
 } fm_player_config_t;
 
 typedef struct {
-    char *title;
-    char *artist;
-    char *album;
+    char title[128];
+    char artist[128];
+    char album[128];
     int pubdate;
-    char *cover;
-    char *url;
-    char *audio;
+    char cover[128];
+    char url[128];
+    char audio[128];
     int like;
 
     // file related action
     FILE *tmpstream;
-    char *tmpstream_path;
-    char *tmpimage_path;
-    char *music_dir;
+    char tmpstream_path[128];
+    char tmpimage_path[128];
+    char music_dir[128];
 } fm_download_info_t;
 
 typedef struct fm_player {
@@ -52,7 +52,7 @@ typedef struct fm_player {
     CURL *curl;
 
     // encapsulating all the necessary information for downloading purposes
-    fm_download_info_t *download;
+    fm_download_info_t download;
 
     fm_player_info_t info;
     fm_player_config_t config;

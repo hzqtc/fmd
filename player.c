@@ -6,7 +6,6 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <libgen.h>
-#include <wordexp.h>
 
 static char *tmpstream_fname = "fmdstream.mp3";
 static char *tmpimage_fname = "cover.jpg";
@@ -14,12 +13,12 @@ static double download_delta_margin = 0.0000001;
 
 void fm_player_download_info_unrate(fm_player_t *pl)
 {
-    pl->download->like = 0;
+    pl->download.like = 0;
 }
 
 void fm_player_download_info_rate(fm_player_t *pl)
 {
-    pl->download->like = 1;
+    pl->download.like = 1;
 }
 
 static size_t download_callback(char *ptr, size_t size, size_t nmemb, void *userp)
@@ -33,9 +32,9 @@ static size_t download_callback(char *ptr, size_t size, size_t nmemb, void *user
         pl->info.file_size += bytes;
 
         // if the url does not start with file then we can download it
-        if (pl->download->tmpstream) {
-            fwrite(ptr, size, nmemb, pl->download->tmpstream);
-            printf("Appended transfer of size %d from %s \n", bytes, pl->download->audio);
+        if (pl->download.tmpstream) {
+            fwrite(ptr, size, nmemb, pl->download.tmpstream);
+            printf("Appended transfer of size %d from %s \n", bytes, pl->download.audio);
         }
 
         mpg123_feed(pl->mh, (unsigned char*) ptr, bytes);
@@ -149,34 +148,9 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
 
     pl->status = FM_PLAYER_STOP;
 
-    // initialize the song info field
-    pl->download = (fm_download_info_t *) malloc(sizeof(fm_download_info_t));
-    pl->download->title = (char *) malloc(128);
-    pl->download->artist = (char *) malloc(128);
-    pl->download->album = (char *) malloc(128);
-    pl->download->cover = (char *) malloc(128);
-    pl->download->url = (char *) malloc(128);
-    pl->download->audio = (char *) malloc(128);
-    pl->download->pubdate = 0;
-    pl->download->like = 0;
-    pl->download->tmpstream = NULL;
-
-    // set up the tmp dir and music dir
-    wordexp_t exp_result;
-    wordexp(config->music_dir, &exp_result, 0);
-    pl->download->music_dir = strdup(exp_result.we_wordv[0]);
-    printf("The music dir path: %s\n", pl->download->music_dir);
-
-    wordexp(config->tmp_dir, &exp_result, 0);
-    char tmp[128];
-    sprintf(tmp, "%s/%s", exp_result.we_wordv[0], tmpstream_fname);
-    pl->download->tmpstream_path = strdup(tmp);
-    printf("The tmpstream path: %s\n", pl->download->tmpstream_path);
-    sprintf(tmp, "%s/%s", exp_result.we_wordv[0], tmpimage_fname);
-    pl->download->tmpimage_path = strdup(tmp);
-    printf("The tmpimage path: %s\n", pl->download->tmpimage_path);
-
-    wordfree(&exp_result);
+    pl->download.tmpstream = NULL;
+    sprintf(pl->download.tmpstream_path, "%s/%s", config->tmp_dir, tmpstream_fname);
+    sprintf(pl->download.tmpimage_path, "%s/%s", config->tmp_dir, tmpimage_fname);
 
     return 0;
 }
@@ -194,40 +168,35 @@ void fm_player_close(fm_player_t *pl)
     pthread_mutex_destroy(&pl->mutex_status);
     pthread_cond_destroy(&pl->cond_play);
 
-    // free all download field
-    if (pl->download->tmpstream)
-        fclose(pl->download->tmpstream);
-    free(pl->download->title);
-    free(pl->download->artist);
-    free(pl->download->album);
-    free(pl->download->cover);
-    free(pl->download->url);
-    free(pl->download->audio);
-    free(pl->download->tmpstream_path);
-    free(pl->download->tmpimage_path);
-    free(pl->download->music_dir);
-    
-    free(pl->download);
+    // free the tmpstream
+    if (pl->download.tmpstream)
+        fclose(pl->download.tmpstream);
 }
 
 void fm_player_set_url(fm_player_t *pl, fm_song_t *song)
 {
     // close the file handler first
-    if (pl->download->tmpstream) {
-        fclose(pl->download->tmpstream);
+    if (pl->download.tmpstream) {
+        fclose(pl->download.tmpstream);
         // download the file 
-        if (pl->download->like) {
+        if (pl->download.like) {
             double dl_size = 0;
             curl_easy_getinfo(pl->curl, CURLINFO_SIZE_DOWNLOAD, &dl_size);
-            printf("Full source size: %f\n", dl_size);
+            printf("curlinfo_size_download: %f\n", dl_size);
+            /*long req_size = 0;*/
+            /*curl_easy_getinfo(pl->curl, CURLINFO_REQUEST_SIZE, &req_size);*/
+            /*printf("curlinfo_request_size: %ld\n", req_size);*/
+            /*double content_size = 0;*/
+            /*curl_easy_getinfo(pl->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &content_size);*/
+            /*printf("curlinfo_content_length_download: %f\n", content_size);*/
 
             struct stat st;
-            stat(pl->download->tmpstream_path, &st);
+            stat(pl->download.tmpstream_path, &st);
             double filesize = st.st_size;
             printf("Actual size of the tmp file: %f\n", filesize);
 
             if (dl_size - filesize < download_delta_margin) {
-                printf("Attemping to download the file\n");
+                printf("Attemping to mv and tag the file\n");
                 // first move the file to a secure location to avoid it being truncated later
                 char cmd[2048];
                 sprintf(cmd, 
@@ -235,18 +204,21 @@ void fm_player_set_url(fm_player_t *pl, fm_song_t *song)
                         "artist='%s'; title='%s'; album='%s'; date='%d';"
                         "[[ \"$date\" =~ [0-9]{4} ]] && datearg=\"--release-year $date\" || datearg=;"
                         "dest=\"%s/${artist//\\//|}/${title//\\//|}.mp3\";"
+                        "[ -f \"$dest\" ] && exit 0;"
                         "mkdir -p \"$(dirname \"$dest\")\";"
                         "mv -f \"$src\" \"$dest\";" 
                         "tmpimg='%s'; cover='%s';"
-                        "(curl --connect-timeout 10 -m 20 -o \"$tmpimg\" \"$cover\";"
+                        "(curl --connect-timeout 15 -m 60 -o \"$tmpimg\" \"$cover\";"
                         "([ -f \"$tmpimg\" ] && identify \"$tmpimg\") && cover=\"$tmpimg\" || cover=\"${cover//:/\\:}\";"
-                        "eyeD3 --artist \"$artist\" --album \"$album\" --title \"$title\" $datearg --add-image \"$cover:FRONT_COVER\" --user-url-frame 'DOUBAN:http\\://music.douban.com%s' \"$dest\";"
+                        "page_url='%s'"
+                        "page_url=\"${page_url//:/\\:}\""
+                        "eyeD3 --artist \"$artist\" --album \"$album\" --title \"$title\" $datearg --add-image \"$cover:FRONT_COVER\" --url-frame \"WORS:$page_url\" \"$dest\";"
                         "rm -f \"$tmpimg\") &", 
-                        pl->download->tmpstream_path, 
-                        pl->download->artist, pl->download->title, pl->download->album, pl->download->pubdate,
-                        pl->download->music_dir,
-                        pl->download->tmpimage_path, pl->download->cover,
-                        pl->download->url);
+                        pl->download.tmpstream_path, 
+                        pl->download.artist, pl->download.title, pl->download.album, pl->download.pubdate,
+                        pl->download.music_dir,
+                        pl->download.tmpimage_path, pl->download.cover,
+                        pl->download.url);
                 printf("Move and tag command: %s\n", cmd);
                 system(cmd);
             }
@@ -257,17 +229,17 @@ void fm_player_set_url(fm_player_t *pl, fm_song_t *song)
 
     // remove the last tmp file
     if (strncmp(url, "file:/", 6) == 0)
-        pl->download->tmpstream = NULL;
+        pl->download.tmpstream = NULL;
     else {
-        pl->download->tmpstream = fopen(pl->download->tmpstream_path, "w");
-        strcpy(pl->download->title, song->title);
-        strcpy(pl->download->artist, song->artist);
-        strcpy(pl->download->album, song->album);
-        strcpy(pl->download->cover, song->cover);
-        strcpy(pl->download->url, song->url);
-        strcpy(pl->download->audio, song->audio);
-        pl->download->pubdate = song->pubdate;
-        pl->download->like = song->like;
+        pl->download.tmpstream = fopen(pl->download.tmpstream_path, "w");
+        strcpy(pl->download.title, song->title);
+        strcpy(pl->download.artist, song->artist);
+        strcpy(pl->download.album, song->album);
+        strcpy(pl->download.cover, song->cover);
+        strcpy(pl->download.url, song->url);
+        strcpy(pl->download.audio, song->audio);
+        pl->download.pubdate = song->pubdate;
+        pl->download.like = song->like;
     }
 
     printf("Player set url: %s\n", url);

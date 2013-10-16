@@ -5,6 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <libgen.h>
+
+
+static char *douban_music_website = "http://music.douban.com";
 
 typedef struct {
     char data[8192];
@@ -26,11 +31,20 @@ static fm_song_t* fm_song_parse_json(struct json_object *obj)
 {
     fm_song_t *song = (fm_song_t*) malloc(sizeof(fm_song_t));
     song->title = strdup(json_object_get_string(json_object_object_get(obj, "title")));
+    printf("parsed title\n");
     song->artist = strdup(json_object_get_string(json_object_object_get(obj, "artist")));
+    song->kbps = strdup(json_object_get_string(json_object_object_get(obj, "kbps")));
     song->album = strdup(json_object_get_string(json_object_object_get(obj, "albumtitle")));
     song->pubdate = json_object_get_int(json_object_object_get(obj, "public_time"));
     song->cover = strdup(json_object_get_string(json_object_object_get(obj, "picture")));
-    song->url = strdup(json_object_get_string(json_object_object_get(obj, "album")));
+    // the url form is NOT helpful. We should automatically add the music.douban.com prefix
+    char *url = strdup(json_object_get_string(json_object_object_get(obj, "album")));
+    if (strncmp(url, douban_music_website, strlen(douban_music_website)) != 0) {
+        char *nu = (char *) malloc(128);
+        sprintf(nu, "%s%s", douban_music_website, url);
+        url = nu;
+    }
+    song->url = url;
     song->audio = strdup(json_object_get_string(json_object_object_get(obj, "url")));
     song->sid = json_object_get_int(json_object_object_get(obj, "sid"));
     song->like = json_object_get_int(json_object_object_get(obj, "like"));
@@ -134,6 +148,7 @@ static void fm_playlist_parse_json(fm_playlist_t *pl, struct json_object *obj)
     }
     printf("Playlist parsing new API response\n");
     array_list *songs = json_object_get_array(json_object_object_get(obj, "song"));
+    printf("parsed song\n");
     for (i = songs->length - 1; i >= 0; i--) {
         struct json_object *o = (struct json_object*) array_list_get_idx(songs, i);
         fm_song_t *song = fm_song_parse_json(o);
@@ -185,22 +200,65 @@ static size_t drop_buffer(char *ptr, size_t size, size_t nmemb, void *userp)
 static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int sid, char act)
 {
     static buffer_t curl_buffer;
-    char url[1024];
-    printf("Playlist send long report: %d:%c\n", sid, act);
-    sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c&h=%s&kbps=%s",
-            pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
-            sid, act, fm_playlist_history_str(pl), pl->config.kbps);
-    printf("Playlist request: %s\n", url);
+    // hack here; use the current channel to determine if the local channel is on board
+    if (pl->config.channel == local_channel) {
+        switch (act) {
+            case 'b': case 's':
+                printf("Ban / Skip stats feedback not supported for local station to optimize performance\n");
+        }
+        char cmd[1024];
+        sprintf(cmd,
+                "IFS=$'\\n';"
+                "echo -n '{\"r\":0,\"song\":[';"
+                "/home/lingnan/bin/eyeD3f -s, -e'\"' '{{"
+                "\"title\":\"{title}\","
+                "\"artist\":\"{artist}\","
+                "\"album\":\"{internet_radio_url}\","
+                "\"albumtitle\":\"{album}\","
+                "\"public_time\":\"{release_date}\","
+                "\"picture\":\"\","
+                "\"kbps\":\"{kbps}\","
+                "\"like\":1,"
+                "\"sid\":\"%d\","
+                "\"url\":\"file:{path}\""
+                "}}' $(find '%s' -type f -name '*.mp3' | shuf);"
+                "echo -n ']}';"
+                , pl->config.uid, pl->config.music_dir);
+        printf("Cmd is: %s\n", cmd);
+        FILE *f = popen(cmd, "r");
+        if (f) {
+            int size = sizeof(curl_buffer.data);
+            memset(curl_buffer.data, 0, size);
+            while (fgets(curl_buffer.data + strlen(curl_buffer.data), size - strlen(curl_buffer.data), f) != NULL);
+            /*printf("Local music information retrieved: %s\n", curl_buffer.data);*/
+            pclose(f);
+        } else
+            printf("Failed to run the command to find the local music");
+    } else {
+        char url[1024];
+        printf("Playlist send long report: %d:%c\n", sid, act);
+        sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c&h=%s&kbps=%s",
+                pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
+                sid, act, fm_playlist_history_str(pl), pl->config.kbps);
+        printf("Playlist request: %s\n", url);
 
-    memset(curl_buffer.data, 0, sizeof(curl_buffer.data));
-    curl_buffer.length = 0;
+        memset(curl_buffer.data, 0, sizeof(curl_buffer.data));
+        curl_buffer.length = 0;
 
-    curl_easy_setopt(pl->curl, CURLOPT_URL, url);
-    curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, append_to_buffer);
-    curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, &curl_buffer);
-    curl_easy_perform(pl->curl);
-
-    return json_tokener_parse(curl_buffer.data);
+        curl_easy_setopt(pl->curl, CURLOPT_URL, url);
+        curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, append_to_buffer);
+        curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, &curl_buffer);
+        curl_easy_perform(pl->curl);
+    }
+    json_object* obj = json_tokener_parse(curl_buffer.data);
+    if (!obj) {
+        printf("Token parser couldn't parse the buffer; Maybe network is down. Switched to local mode instead\n");
+        pl->config.channel = local_channel;
+        obj = fm_playlist_send_long_report(pl, sid, act);
+        if (!obj) 
+            printf("Local station failed as well.");
+    } 
+    return obj;
 }
 
 static void fm_playlist_send_short_report(fm_playlist_t *pl, int sid, char act)
@@ -226,20 +284,39 @@ fm_song_t* fm_playlist_current(fm_playlist_t *pl)
         return pl->playlist;
 }
 
+static void fm_playlist_next_on_link(fm_playlist_t *pl, int sid)
+{
+    fm_song_free(fm_playlist_pop_front(pl));
+    if (pl->playlist == NULL) {
+        printf("Playlist empty, request more\n");
+        fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 'p'));
+    }
+}
+
+/** Remove the local song */
+static void fm_playlist_remove(fm_playlist_t *pl, int sid)
+{
+    // we should try to remove the current song from the cache
+    char *url = pl->playlist->audio;
+    if (strncmp(url, "file:/", 6) == 0 && strcmp(url + strlen(url) - 4, ".mp3") == 0) {
+        url = pl->playlist->audio + 5;
+        unlink(url);
+        // attempt to remove the directory if its empty as well
+        rmdir(dirname(url));
+    } else 
+        printf("Inconsistent audio address format: %s\n", pl->playlist->audio);
+    // same action as n
+    fm_playlist_next_on_link(pl, sid);
+}
+
 fm_song_t* fm_playlist_next(fm_playlist_t *pl)
 {
     int sid = 0;
     printf("Playlist next song\n");
     if (pl->playlist) {
-        sid = pl->playlist->sid;
         fm_playlist_history_add(pl, pl->playlist, 'e');
         fm_playlist_send_short_report(pl, sid, 'e');
-
-        fm_song_free(fm_playlist_pop_front(pl));
-        if (pl->playlist == NULL) {
-            printf("Playlist empty, request more\n");
-            fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 'p'));
-        }
+        fm_playlist_next_on_link(pl, sid);
     }
     else {
         printf("Playlist init empty, request new\n");
@@ -248,15 +325,21 @@ fm_song_t* fm_playlist_next(fm_playlist_t *pl)
     return pl->playlist;
 }
 
-fm_song_t* fm_playlist_skip(fm_playlist_t *pl)
+
+fm_song_t* fm_playlist_skip(fm_playlist_t *pl, int force_refresh)
 {
     int sid = 0;
     printf("Playlist skip song\n");
     if (pl->playlist) {
         sid = pl->playlist->sid;
         fm_playlist_history_add(pl, pl->playlist, 's');
-        fm_playlist_clear(pl);
-        fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 's'));
+        if (!force_refresh && pl->config.channel == local_channel) {
+            // same action as n
+            fm_playlist_next_on_link(pl, sid);
+        } else {
+            fm_playlist_clear(pl);
+            fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 's'));
+        }
         return pl->playlist;
     }
     else
@@ -270,8 +353,12 @@ fm_song_t* fm_playlist_ban(fm_playlist_t *pl)
     if (pl->playlist) {
         sid = pl->playlist->sid;
         fm_playlist_history_add(pl, pl->playlist, 'b');
-        fm_playlist_clear(pl);
-        fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 'b'));
+        if (pl->config.channel == local_channel) {
+            fm_playlist_remove(pl, sid);
+        } else {
+            fm_playlist_clear(pl);
+            fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 'b'));
+        }
         return pl->playlist;
     }
     else
@@ -283,7 +370,8 @@ void fm_playlist_rate(fm_playlist_t *pl)
     printf("Playlist rate song\n");
     if (pl->playlist) {
         pl->playlist->like = 1;
-        fm_playlist_send_short_report(pl, pl->playlist->sid, 'r');
+        if (pl->config.channel != local_channel)
+            fm_playlist_send_short_report(pl, pl->playlist->sid, 'r');
     }
 }
 
@@ -292,6 +380,9 @@ void fm_playlist_unrate(fm_playlist_t *pl)
     printf("Playlist unrate song\n");
     if (pl->playlist) {
         pl->playlist->like = 0;
-        fm_playlist_send_short_report(pl, pl->playlist->sid, 'u');
+        if (pl->config.channel -= local_channel)
+            fm_playlist_remove(pl, pl->playlist->sid);
+        else
+            fm_playlist_send_short_report(pl, pl->playlist->sid, 'u');
     }
 }
