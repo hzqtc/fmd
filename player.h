@@ -70,7 +70,7 @@ typedef struct fm_player {
 void fm_player_download_info_unrate(fm_player_t *pl);
 void fm_player_download_info_rate(fm_player_t *pl);
 
-void fm_player_set_url(fm_player_t *pl, fm_song_t *song);
+int fm_player_set_url(fm_player_t *pl, fm_song_t *song);
 void fm_player_set_ack(fm_player_t *pl, pthread_t tid, int sig);
 
 int fm_player_pos(fm_player_t *pl);

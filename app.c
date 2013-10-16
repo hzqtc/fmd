@@ -69,10 +69,9 @@ void app_client_handler(void *ptr, char *input, char *output)
     char *arg = split(input, ' ');
 
     if (strcmp(cmd, "play") == 0) {
-        if (app->player.status == FM_PLAYER_STOP) {
-            fm_player_set_url(&app->player, fm_playlist_current(&app->playlist));
+        if (app->player.status != FM_PLAYER_STOP || fm_player_set_url(&app->player, fm_playlist_current(&app->playlist)) == 0) {
+            fm_player_play(&app->player);
         }
-        fm_player_play(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "stop") == 0) {
@@ -92,20 +91,20 @@ void app_client_handler(void *ptr, char *input, char *output)
                 fm_player_play(&app->player);
                 break;
             case FM_PLAYER_STOP:
-                fm_player_set_url(&app->player, fm_playlist_current(&app->playlist));
-                fm_player_play(&app->player);
+                if (fm_player_set_url(&app->player, fm_playlist_current(&app->playlist)) == 0)
+                    fm_player_play(&app->player);
                 break;
         }
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "skip") == 0 || strcmp(cmd, "next") == 0) {
-        fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0));
-        fm_player_play(&app->player);
+        if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0)) == 0)
+            fm_player_play(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "ban") == 0) {
-        fm_player_set_url(&app->player, fm_playlist_ban(&app->playlist));
-        fm_player_play(&app->player);
+        if (fm_player_set_url(&app->player, fm_playlist_ban(&app->playlist)) == 0)
+            fm_player_play(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "rate") == 0) {
@@ -132,8 +131,8 @@ void app_client_handler(void *ptr, char *input, char *output)
             int ch = atoi(arg);
             if (ch != app->playlist.config.channel) {
                 app->playlist.config.channel = ch;
-                fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 1));
-                fm_player_play(&app->player);
+                if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 1)) == 0)
+                    fm_player_play(&app->player);
             }
             get_fm_info(app, output);
         }
@@ -151,8 +150,8 @@ void app_client_handler(void *ptr, char *input, char *output)
         else {
             if (strcmp(arg, app->playlist.config.kbps) != 0) {
                 strcpy(app->playlist.config.kbps, arg);
-                fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0));
-                fm_player_play(&app->player);
+                if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0)) == 0)
+                    fm_player_play(&app->player);
             }
             get_fm_info(app, output);
         }
@@ -213,8 +212,8 @@ void daemonize(const char *log_file, const char *err_file)
 
 void player_end_handler(int sig)
 {
-    fm_player_set_url(&app.player, fm_playlist_next(&app.playlist));
-    fm_player_play(&app.player);
+    if (fm_player_set_url(&app.player, fm_playlist_next(&app.playlist)) == 0)
+        fm_player_play(&app.player);
 }
 
 void install_player_end_handler(fm_player_t *player)

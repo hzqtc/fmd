@@ -11,6 +11,7 @@
 
 
 static char *douban_music_website = "http://music.douban.com";
+static int local_channel_fetch_number = 25;
 
 typedef struct {
     char data[8192];
@@ -141,24 +142,30 @@ static void fm_playlist_clear(fm_playlist_t *pl)
 
 static void fm_playlist_parse_json(fm_playlist_t *pl, struct json_object *obj)
 {
-    int i;
-    int ret = json_object_get_int(json_object_object_get(obj, "r"));
-    if (ret != 0) {
-        fprintf(stderr, "API error: %s\n", json_object_get_string(json_object_object_get(obj, "err")));
-        exit(ret);
-    }
-    printf("Playlist parsing new API response\n");
-    array_list *songs = json_object_get_array(json_object_object_get(obj, "song"));
-    printf("parsed song\n");
-    for (i = songs->length - 1; i >= 0; i--) {
-        struct json_object *o = (struct json_object*) array_list_get_idx(songs, i);
-        fm_song_t *song = fm_song_parse_json(o);
-        if (song) {
-            fm_playlist_push_front(pl, song);
-            printf("Playlist add song %d to the top\n", song->sid);
+    if (obj) {
+        int i;
+        int ret = json_object_get_int(json_object_object_get(obj, "r"));
+        if (ret != 0) {
+            fprintf(stderr, "API error: %s\n", json_object_get_string(json_object_object_get(obj, "err")));
+            exit(ret);
         }
+        printf("Playlist parsing new API response\n");
+        array_list *songs = json_object_get_array(json_object_object_get(obj, "song"));
+        printf("parsed song\n");
+        for (i = songs->length - 1; i >= 0; i--) {
+            struct json_object *o = (struct json_object*) array_list_get_idx(songs, i);
+            fm_song_t *song = fm_song_parse_json(o);
+            if (song) {
+                fm_playlist_push_front(pl, song);
+                printf("Playlist add song %d to the top\n", song->sid);
+            }
+        }
+        json_object_put(obj);
+    } else {
+        printf("Unable to parse object\n");
+        // if we fail to parse json we should probably clear the playlist to indicate that we are NOT good
+        fm_playlist_clear(pl);
     }
-    json_object_put(obj);
 }
 
 void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config)
@@ -201,6 +208,7 @@ static size_t drop_buffer(char *ptr, size_t size, size_t nmemb, void *userp)
 static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int sid, char act)
 {
     static buffer_t curl_buffer;
+    json_object* obj = NULL;
     // hack here; use the current channel to determine if the local channel is on board
     if (pl->config.channel == local_channel) {
         switch (act) {
@@ -222,19 +230,24 @@ static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int s
                 "\"like\":1,"
                 "\"sid\":\"%d\","
                 "\"url\":\"file:{path}\""
-                "}}' $(find $'%s' -type f -name '*.mp3' | shuf);"
+                "}}' $(find $'%s' -type f -name '*.mp3' | shuf | head -n '%d');"
                 "echo -n ']}';"
-                , pl->config.uid, escapesh(bmd, pl->config.music_dir));
+                , pl->config.uid, escapesh(bmd, pl->config.music_dir), local_channel_fetch_number);
         printf("Cmd is: %s\n", cmd);
         FILE *f = popen(cmd, "r");
         if (f) {
-            int size = sizeof(curl_buffer.data);
+            int size = sizeof(curl_buffer.data), len;
             memset(curl_buffer.data, 0, size);
-            while (fgets(curl_buffer.data + strlen(curl_buffer.data), size - strlen(curl_buffer.data), f) != NULL);
-            /*printf("Local music information retrieved: %s\n", curl_buffer.data);*/
+            while ((len = strlen(curl_buffer.data)) <= size - 1  && fgets(curl_buffer.data + len, size - len, f) != NULL);
+            printf("Local music information retrieved: %s\n", curl_buffer.data);
             pclose(f);
+
+            obj = json_tokener_parse(curl_buffer.data);
+            if (!obj) 
+                printf("Local station failed to generate recognizable json data. Buffer = %s\n", curl_buffer.data);
         } else
-            printf("Failed to run the command to find the local music");
+            printf("Failed to open the pipe for the command to find the local music\n");
+
     } else {
         char url[1024];
         printf("Playlist send long report: %d:%c\n", sid, act);
@@ -250,15 +263,14 @@ static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int s
         curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, append_to_buffer);
         curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, &curl_buffer);
         curl_easy_perform(pl->curl);
+
+        obj = json_tokener_parse(curl_buffer.data);
+        if (!obj) {
+            printf("Token parser couldn't parse the buffer; Maybe network is down. Switched to local mode instead. Buffer = %s\n", curl_buffer.data);
+            pl->config.channel = local_channel;
+            obj = fm_playlist_send_long_report(pl, sid, act);
+        }
     }
-    json_object* obj = json_tokener_parse(curl_buffer.data);
-    if (!obj) {
-        printf("Token parser couldn't parse the buffer; Maybe network is down. Switched to local mode instead\n");
-        pl->config.channel = local_channel;
-        obj = fm_playlist_send_long_report(pl, sid, act);
-        if (!obj) 
-            printf("Local station failed as well.");
-    } 
     return obj;
 }
 

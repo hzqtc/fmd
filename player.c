@@ -174,8 +174,17 @@ void fm_player_close(fm_player_t *pl)
         fclose(pl->download.tmpstream);
 }
 
-void fm_player_set_url(fm_player_t *pl, fm_song_t *song)
+int fm_player_set_url(fm_player_t *pl, fm_song_t *song)
 {
+
+    if (!song) {
+        printf("No song to play");
+        if (pl->status != FM_PLAYER_STOP) {
+            fm_player_stop(pl);
+        }
+        return -1;
+    }
+
     // close the file handler first
     if (pl->download.tmpstream) {
         fclose(pl->download.tmpstream);
@@ -253,6 +262,7 @@ void fm_player_set_url(fm_player_t *pl, fm_song_t *song)
         fm_player_stop(pl);
     }
     curl_easy_setopt(pl->curl, CURLOPT_URL, url);
+    return 0;
 }
 
 void fm_player_set_ack(fm_player_t *pl, pthread_t tid, int sig)
