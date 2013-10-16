@@ -29,7 +29,7 @@ To make sure all the ID3 tags and cover images work you need to have [eyeD3](htt
 
 ## Local music channel / Red-Heart channel
 
-A new channel with the login name of the current user is added. All music files ending with `.mp3` in the `music_dir` specified in the previous section are added randomly to the playlist.
+A new channel with the default name of that of the current user is added. All music files ending with `.mp3` in the `music_dir` specified in the previous section are added randomly to the playlist.
 
 ### Like
 
@@ -44,8 +44,8 @@ Note that all actions are *local* only -- they do not send reports to Douban. Th
 * faster performance
 * when the network is down, playing local songs without any network connection should be desirable
 
-The local music channel is also the fall-back channel if network becomes unavailable i.e. when `fmc` is unable to retrieve any playlists for the online channels it will switch to the local channel instead.
+The local music channel is also the fall-back channel if network becomes unavailable i.e. when `fmc` is unable to retrieve any playlists for the online channels.
 
-Aside from these things the local music channel is almost identical to any online channel.
+Aside from these things the local channel is almost identical to any online channel.
 
-To use the local music channel though, you need to have a ID3 tag parser. I've written [one](eyeD3f) and included in this repo.
+To use the local channel though, you need to have a ID3 tag parser. I've written [one](eyeD3f) and included in this repo.
