@@ -38,7 +38,7 @@ void get_fm_info(fm_app_t *app, char *output)
         case FM_PLAYER_PAUSE:
             current = fm_playlist_current(&app->playlist);
             char btitle[128], bart[128], balb[128], bcover[128], burl[128]; 
-            sprintf(output, "{\"status\":\"%s\",\"kbps\":%s,\"channel\":%d,\"user\":\"%s\","
+            sprintf(output, "{\"status\":\"%s\",\"kbps\":\"%s\",\"channel\":%d,\"user\":\"%s\","
                     "\"title\":\"%s\",\"artist\":\"%s\", \"album\":\"%s\",\"year\":%d,"
                     "\"cover\":\"%s\",\"url\":\"%s\",\"sid\":%d,"
                     "\"like\":%d,\"pos\":%d,\"len\":%d}",

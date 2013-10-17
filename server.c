@@ -102,7 +102,7 @@ static void getPeerInfo(int socket, char *ipstr, int iplen, int *port) {
 void fm_server_run(fm_server_t *server, server_handle handle, void *handle_data)
 {
     int i;
-    int client;
+    int client = 0;
     char input_buf[64];
     char output_buf[1024];
     int buf_size;

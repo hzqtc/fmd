@@ -10,7 +10,7 @@
 
 static char *tmpstream_fname = "fmdstream.mp3";
 static char *tmpimage_fname = "cover.jpg";
-static double download_delta_margin = 0.0000001;
+static double download_delta_margin = 0.001;
 
 void fm_player_download_info_unrate(fm_player_t *pl)
 {
@@ -25,23 +25,19 @@ void fm_player_download_info_rate(fm_player_t *pl)
 static size_t download_callback(char *ptr, size_t size, size_t nmemb, void *userp)
 {
     fm_player_t *pl = (fm_player_t*) userp;
-    if (pl->status == FM_PLAYER_STOP) {
-        return 0;
-    }
-    else {
-        size_t bytes = size * nmemb;
+    size_t bytes = size * nmemb;
+    if (pl->status != FM_PLAYER_STOP) {
         pl->info.file_size += bytes;
 
-        // if the url does not start with file then we can download it
         if (pl->download.tmpstream) {
             fwrite(ptr, size, nmemb, pl->download.tmpstream);
-            printf("Appended transfer of size %d from %s \n", (int) bytes, pl->download.audio);
-        }
+            printf("Appended transfer of size %d \n", (int) bytes);
+        } 
 
         mpg123_feed(pl->mh, (unsigned char*) ptr, bytes);
         pthread_cond_signal(&pl->cond_play);
-        return bytes;
     }
+    return bytes;
 }
 
 static void* download_thread(void *data)
@@ -140,7 +136,10 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
 
     pl->curl = curl_easy_init();
     curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, download_callback);
+    curl_easy_setopt(pl->curl, CURLOPT_CONNECTTIMEOUT, 10);
+    curl_easy_setopt(pl->curl, CURLOPT_VERBOSE, 1);
     curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, pl);
+    curl_easy_setopt(pl->curl, CURLOPT_HEADER, 1);
 
     pl->tid_ack = 0;
 
@@ -170,18 +169,20 @@ void fm_player_close(fm_player_t *pl)
     pthread_cond_destroy(&pl->cond_play);
 
     // free the tmpstream
-    if (pl->download.tmpstream)
+    if (pl->download.tmpstream) {
         fclose(pl->download.tmpstream);
+        pl->download.tmpstream = NULL;
+    }
 }
 
 int fm_player_set_url(fm_player_t *pl, fm_song_t *song)
 {
+    if (pl->status != FM_PLAYER_STOP) {
+        fm_player_stop(pl);
+    }
 
     if (!song) {
-        printf("No song to play");
-        if (pl->status != FM_PLAYER_STOP) {
-            fm_player_stop(pl);
-        }
+        printf("No song to play\n");
         return -1;
     }
 
@@ -190,22 +191,16 @@ int fm_player_set_url(fm_player_t *pl, fm_song_t *song)
         fclose(pl->download.tmpstream);
         // download the file 
         if (pl->download.like) {
-            double dl_size = 0;
-            curl_easy_getinfo(pl->curl, CURLINFO_SIZE_DOWNLOAD, &dl_size);
-            printf("curlinfo_size_download: %f\n", dl_size);
-            /*long req_size = 0;*/
-            /*curl_easy_getinfo(pl->curl, CURLINFO_REQUEST_SIZE, &req_size);*/
-            /*printf("curlinfo_request_size: %ld\n", req_size);*/
-            /*double content_size = 0;*/
-            /*curl_easy_getinfo(pl->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &content_size);*/
-            /*printf("curlinfo_content_length_download: %f\n", content_size);*/
+            double content_size = 0;
+            curl_easy_getinfo(pl->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &content_size);
+            printf("curlinfo_content_length_download: %f\n", content_size);
 
             struct stat st;
             stat(pl->download.tmpstream_path, &st);
             double filesize = st.st_size;
             printf("Actual size of the tmp file: %f\n", filesize);
 
-            if (dl_size - filesize < download_delta_margin) {
+            if (content_size - filesize < download_delta_margin) {
                 printf("Attemping to mv and tag the file\n");
                 // first move the file to a secure location to avoid it being truncated later
                 char cmd[2048];
@@ -238,29 +233,26 @@ int fm_player_set_url(fm_player_t *pl, fm_song_t *song)
                 system(cmd);
             }
         }
-    }
+    } 
 
     char *url = song->audio;
 
+    FILE *tmpstream_old = pl->download.tmpstream;
     // remove the last tmp file
-    if (strncmp(url, "file:/", 6) == 0)
+    if (strncmp(url, "file:/", 6) == 0) {
         pl->download.tmpstream = NULL;
-    else {
+    } else {
         pl->download.tmpstream = fopen(pl->download.tmpstream_path, "w");
         strcpy(pl->download.title, song->title);
         strcpy(pl->download.artist, song->artist);
         strcpy(pl->download.album, song->album);
         strcpy(pl->download.cover, song->cover);
         strcpy(pl->download.url, song->url);
-        strcpy(pl->download.audio, song->audio);
         pl->download.pubdate = song->pubdate;
         pl->download.like = song->like;
     }
 
     printf("Player set url: %s\n", url);
-    if (pl->status != FM_PLAYER_STOP) {
-        fm_player_stop(pl);
-    }
     curl_easy_setopt(pl->curl, CURLOPT_URL, url);
     return 0;
 }

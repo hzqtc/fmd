@@ -36,7 +36,6 @@ typedef struct {
     int pubdate;
     char cover[128];
     char url[128];
-    char audio[256];
     int like;
 
     // file related action

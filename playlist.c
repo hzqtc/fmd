@@ -328,7 +328,8 @@ fm_song_t* fm_playlist_next(fm_playlist_t *pl)
     printf("Playlist next song\n");
     if (pl->playlist) {
         fm_playlist_history_add(pl, pl->playlist, 'e');
-        fm_playlist_send_short_report(pl, sid, 'e');
+        if (pl->config.channel != local_channel)
+            fm_playlist_send_short_report(pl, sid, 'e');
         fm_playlist_next_on_link(pl, sid);
     }
     else {

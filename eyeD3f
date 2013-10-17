@@ -46,9 +46,10 @@ for f in args.audiofile:
     # for each specifier
     file = eyed3.load(f)
     path = unicode(os.path.realpath(f.decode('utf-8')))
-    kbps = re.findall(r'~(\d+)',file.info.bit_rate_str);
-    kbps = kbps[0] if kbps else u"";
-    artist = title = album = track = release_date = publisher = artist_url = audio_source_url = audio_file_url = internet_radio_url = commercial_url = payment_url = publisher_url = copyright_url  = ""
+    kbps = artist = title = album = track = release_date = publisher = artist_url = audio_source_url = audio_file_url = internet_radio_url = commercial_url = payment_url = publisher_url = copyright_url  = ""
+    if file.info:
+        kbps = re.findall(r'~(\d+)',file.info.bit_rate_str);
+        kbps = kbps[0] if kbps else u"";
     if file.tag:
         artist = file.tag.artist
         title = file.tag.title
