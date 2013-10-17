@@ -173,10 +173,12 @@ void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config)
     pl->history = NULL;
     pl->playlist = NULL;
 
-    pl->api = "http://www.douban.com/j/app/radio/people";
-    pl->channel_api = "http://www.douban.com/j/app/radio/channels";
+    pl->douban_api = "http://www.douban.com/j/app/radio/people";
+    pl->douban_channel_api = "http://www.douban.com/j/app/radio/channels";
     pl->app_name = "radio_desktop_win";
     pl->version = "100";
+
+    pl->jing_api = "http://jing.fm/api/v1";
 
     pl->config = *config;
 
@@ -205,73 +207,121 @@ static size_t drop_buffer(char *ptr, size_t size, size_t nmemb, void *userp)
     return bytes;
 }
 
+static struct json_object* fm_playlist_local_send_long_report(fm_playlist_t *pl, int sid, char act, buffer_t curl_buffer)
+{
+    json_object* obj = NULL;
+    switch (act) {
+        case 'b': case 's':
+            printf("Ban / Skip stats feedback not supported for local station to optimize performance\n");
+    }
+    char cmd[1024], bmd[128];
+    sprintf(cmd,
+            "IFS=$'\\n';"
+            "echo -n '{\"r\":0,\"song\":[';"
+            "eyeD3f -s, -e'\"' '{{"
+            "\"title\":\"{title}\","
+            "\"artist\":\"{artist}\","
+            "\"album\":\"{internet_radio_url}\","
+            "\"albumtitle\":\"{album}\","
+            "\"public_time\":\"{release_date}\","
+            "\"picture\":\"\","
+            "\"kbps\":\"{kbps}\","
+            "\"like\":1,"
+            "\"sid\":\"%d\","
+            "\"url\":\"file:{path}\""
+            "}}' $(find $'%s' -type f -name '*.mp3' | shuf | head -n '%d');"
+            "echo -n ']}';"
+            , sid, escapesh(bmd, pl->config.music_dir), local_channel_fetch_number);
+    printf("Cmd is: %s\n", cmd);
+    FILE *f = popen(cmd, "r");
+    if (f) {
+        int size = sizeof(curl_buffer.data), len;
+        memset(curl_buffer.data, 0, size);
+        while ((len = strlen(curl_buffer.data)) <= size - 1  && fgets(curl_buffer.data + len, size - len, f) != NULL);
+        /*printf("Local music information retrieved: %s\n", curl_buffer.data);*/
+        pclose(f);
+
+        obj = json_tokener_parse(curl_buffer.data);
+        if (!obj) 
+            printf("Local station failed to generate recognizable json data. Buffer = %s\n", curl_buffer.data);
+    } else
+        printf("Failed to open the pipe for the command to find the local music\n");
+    return obj;
+}
+
+static struct json_object* fm_playlist_douban_send_long_report(fm_playlist_t *pl, int sid, char act, buffer_t curl_buffer)
+{
+    char url[1024];
+    printf("Playlist send long report: %d:%c\n", sid, act);
+    sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%s&sid=%d&type=%c&h=%s&kbps=%s",
+            pl->douban_api, pl->app_name, pl->version, pl->config.douban_uid, pl->config.expire, pl->config.douban_token, pl->config.channel,
+            sid, act, fm_playlist_history_str(pl), pl->config.kbps);
+    printf("Playlist request: %s\n", url);
+
+    memset(curl_buffer.data, 0, sizeof(curl_buffer.data));
+    curl_buffer.length = 0;
+
+    curl_easy_setopt(pl->curl, CURLOPT_HTTPGET, 1);
+    curl_easy_setopt(pl->curl, CURLOPT_URL, url);
+    curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, append_to_buffer);
+    curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, &curl_buffer);
+    curl_easy_perform(pl->curl);
+
+    json_object* obj = json_tokener_parse(curl_buffer.data);
+    if (!obj) {
+        printf("Token parser couldn't parse the buffer; Maybe network is down. Switched to local mode instead. Buffer = %s\n", curl_buffer.data);
+        pl->config.channel = local_channel;
+        obj = fm_playlist_local_send_long_report(pl, sid, act, curl_buffer);
+    }
+    return obj;
+}
+
+static struct json_object* fm_playlist_jing_send_long_report(fm_playlist_t *pl, int sid, char act, buffer_t curl_buffer)
+{
+    memset(curl_buffer.data, 0, sizeof(curl_buffer.data));
+    curl_buffer.length = 0;
+
+    char buf[128];
+    sprintf(buf, "%s/search/jing/fetch_pls", pl->jing_api);
+
+    curl_easy_setopt(pl->curl, CURLOPT_URL, buf);
+    curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, append_to_buffer);
+    curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, &curl_buffer);
+    // set up the post fields
+    sprintf(buf, "q=%s&u=%d&ps=10&tid=0&mt=&ss=true", pl->config.channel, pl->config.jing_uid);
+    char *arg = curl_easy_escape(pl->curl, buf, 0);
+    curl_easy_setopt(pl->curl, CURLOPT_COPYPOSTFIELDS, arg);
+    struct curl_slist *slist = NULL;
+    sprintf(buf, "Jing-A-Token-Header:%s", pl->config.jing_atoken);
+    slist = curl_slist_append(slist, buf);
+    sprintf(buf, "Jing-R-Token-Header:%s", pl->config.jing_rtoken);
+    slist = curl_slist_append(slist, buf);
+    curl_easy_setopt(pl->curl, CURLOPT_HTTPHEADER, slist);
+    curl_easy_perform(pl->curl);
+
+    json_object* obj = json_tokener_parse(curl_buffer.data);
+    if (!obj) {
+        printf("Token parser couldn't parse the buffer; Maybe network is down. Switched to local mode instead. Buffer = %s\n", curl_buffer.data);
+        pl->config.channel = local_channel;
+        obj = fm_playlist_local_send_long_report(pl, sid, act, curl_buffer);
+    }
+    curl_free(arg);
+    curl_slist_free_all(slist);
+}
+
 static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int sid, char act)
 {
     static buffer_t curl_buffer;
-    json_object* obj = NULL;
-    // hack here; use the current channel to determine if the local channel is on board
-    if (pl->config.channel == local_channel) {
-        switch (act) {
-            case 'b': case 's':
-                printf("Ban / Skip stats feedback not supported for local station to optimize performance\n");
-        }
-        char cmd[1024], bmd[128];
-        sprintf(cmd,
-                "IFS=$'\\n';"
-                "echo -n '{\"r\":0,\"song\":[';"
-                "eyeD3f -s, -e'\"' '{{"
-                "\"title\":\"{title}\","
-                "\"artist\":\"{artist}\","
-                "\"album\":\"{internet_radio_url}\","
-                "\"albumtitle\":\"{album}\","
-                "\"public_time\":\"{release_date}\","
-                "\"picture\":\"\","
-                "\"kbps\":\"{kbps}\","
-                "\"like\":1,"
-                "\"sid\":\"%d\","
-                "\"url\":\"file:{path}\""
-                "}}' $(find $'%s' -type f -name '*.mp3' | shuf | head -n '%d');"
-                "echo -n ']}';"
-                , sid, escapesh(bmd, pl->config.music_dir), local_channel_fetch_number);
-        printf("Cmd is: %s\n", cmd);
-        FILE *f = popen(cmd, "r");
-        if (f) {
-            int size = sizeof(curl_buffer.data), len;
-            memset(curl_buffer.data, 0, size);
-            while ((len = strlen(curl_buffer.data)) <= size - 1  && fgets(curl_buffer.data + len, size - len, f) != NULL);
-            /*printf("Local music information retrieved: %s\n", curl_buffer.data);*/
-            pclose(f);
-
-            obj = json_tokener_parse(curl_buffer.data);
-            if (!obj) 
-                printf("Local station failed to generate recognizable json data. Buffer = %s\n", curl_buffer.data);
-        } else
-            printf("Failed to open the pipe for the command to find the local music\n");
-
-    } else {
-        char url[1024];
-        printf("Playlist send long report: %d:%c\n", sid, act);
-        sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c&h=%s&kbps=%s",
-                pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
-                sid, act, fm_playlist_history_str(pl), pl->config.kbps);
-        printf("Playlist request: %s\n", url);
-
-        memset(curl_buffer.data, 0, sizeof(curl_buffer.data));
-        curl_buffer.length = 0;
-
-        curl_easy_setopt(pl->curl, CURLOPT_URL, url);
-        curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, append_to_buffer);
-        curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, &curl_buffer);
-        curl_easy_perform(pl->curl);
-
-        obj = json_tokener_parse(curl_buffer.data);
-        if (!obj) {
-            printf("Token parser couldn't parse the buffer; Maybe network is down. Switched to local mode instead. Buffer = %s\n", curl_buffer.data);
-            pl->config.channel = local_channel;
-            obj = fm_playlist_send_long_report(pl, sid, act);
-        }
+    // try to parse the channel to make sense
+    char **end;
+    long int ch = strtol(pl->config.channel, end, 10);
+    if (**end == '\0') {
+        // this is valid number
+        if (strcmp(pl->config.channel, local_channel) == 0)
+            return fm_playlist_local_send_long_report(pl, sid, act, curl_buffer);
+        return fm_playlist_local_send_long_report(pl, sid, act, curl_buffer);
     }
-    return obj;
+    return fm_playlist_jing_send_long_report(pl, sid, act, curl_buffer);
 }
 
 static void fm_playlist_send_short_report(fm_playlist_t *pl, int sid, char act)
@@ -279,10 +329,11 @@ static void fm_playlist_send_short_report(fm_playlist_t *pl, int sid, char act)
     char url[1024];
     printf("Playlist send short report: %d:%c\n", sid, act);
     sprintf(url, "%s?app_name=%s&version=%s&user_id=%d&expire=%d&token=%s&channel=%d&sid=%d&type=%c&kbps=%s",
-            pl->api, pl->app_name, pl->version, pl->config.uid, pl->config.expire, pl->config.token, pl->config.channel,
+            pl->douban_api, pl->app_name, pl->version, pl->config.douban_uid, pl->config.expire, pl->config.douban_token, pl->config.channel,
             sid, act, pl->config.kbps);
     printf("Playlist request: %s\n", url);
 
+    curl_easy_setopt(pl->curl, CURLOPT_HTTPGET, 1);
     curl_easy_setopt(pl->curl, CURLOPT_URL, url);
     curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, drop_buffer);
     curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, NULL);
@@ -396,7 +447,7 @@ void fm_playlist_unrate(fm_playlist_t *pl)
     printf("Playlist unrate song\n");
     if (pl->playlist) {
         pl->playlist->like = 0;
-        if (pl->config.channel -= local_channel)
+        if (strcmp(pl->config.channel, local_channel) == 0)
             fm_playlist_remove(pl, pl->playlist->sid);
         else
             fm_playlist_send_short_report(pl, pl->playlist->sid, 'u');

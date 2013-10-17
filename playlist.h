@@ -2,7 +2,7 @@
 #define _FM_PLAYLIST_H_
 
 #include <curl/curl.h>
-#define local_channel 999
+#define local_channel "999"
 
 typedef struct fm_song {
     char *title;
@@ -25,21 +25,28 @@ typedef struct fm_history {
 } fm_history_t;
 
 typedef struct {
-    int channel;
-    int uid;
+    char *channel;
+    int douban_uid;
     char uname[16];
-    char token[16];
+    char douban_token[16];
     int expire;
     char kbps[8];
     char music_dir[128];
+
+    int jing_uid;
+    char jing_atoken[50];
+    char jing_rtoken[50];
 } fm_playlist_config_t;
 
 typedef struct {
     fm_history_t *history;
     fm_song_t *playlist;
 
-    char *api;
-    char *channel_api;
+    char *douban_api;
+    char *douban_channel_api;
+
+    char *jing_api;
+
     char *app_name;
     char *version;
 

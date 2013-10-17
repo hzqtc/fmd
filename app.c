@@ -128,9 +128,8 @@ void app_client_handler(void *ptr, char *input, char *output)
             sprintf(output, "{\"status\":\"error\",\"message\":\"Missing argument: %s\"}", input);
         }
         else {
-            int ch = atoi(arg);
-            if (ch != app->playlist.config.channel) {
-                app->playlist.config.channel = ch;
+            if (strcmp(arg, app->playlist.config.channel) != 0) {
+                strcpy(app->playlist.config.channel, arg);
                 if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 1)) == 0)
                     fm_player_play(&app->player);
             }
@@ -275,12 +274,16 @@ int main() {
     daemonize(log_file, err_file);
 
     fm_playlist_config_t playlist_conf = {
-        .channel = 1,
-        .uid = 0,
+        .channel = "0",
+        .douban_uid = 0,
         .uname = "",
-        .token = "",
+        .douban_token = "",
         .expire = 0,
-        .kbps = ""
+        .kbps = "",
+        .music_dir = "~/Music",
+        .jing_uid = 0,
+        .jing_atoken = "",
+        .jing_rtoken = ""
     };
     fm_player_config_t player_conf = {
         .rate = 44100,
@@ -293,16 +296,16 @@ int main() {
     };
     fm_config_t configs[] = {
         {
-            .type = FM_CONFIG_INT,
+            .type = FM_CONFIG_STR,
             .section = "DoubanFM",
             .key = "channel",
-            .val.i = &playlist_conf.channel
+            .val.s = playlist_conf.channel
         },
         {
             .type = FM_CONFIG_INT,
             .section = "DoubanFM",
             .key = "uid",
-            .val.i = &playlist_conf.uid
+            .val.i = &playlist_conf.douban_uid
         },
         {
             .type = FM_CONFIG_STR,
@@ -314,7 +317,7 @@ int main() {
             .type = FM_CONFIG_STR,
             .section = "DoubanFM",
             .key = "token",
-            .val.s = playlist_conf.token
+            .val.s = playlist_conf.douban_token
         },
         {
             .type = FM_CONFIG_INT,
@@ -369,7 +372,26 @@ int main() {
             .section = "Server",
             .key = "port",
             .val.s = app.server.port
-        }
+        },
+        // for jing
+        {
+            .type = FM_CONFIG_STR,
+            .section = "JingFM",
+            .key = "atoken",
+            .val.s = playlist_conf.jing_atoken
+        },
+        {
+            .type = FM_CONFIG_STR,
+            .section = "JingFM",
+            .key = "rtoken",
+            .val.s = playlist_conf.jing_rtoken
+        },
+        {
+            .type = FM_CONFIG_INT,
+            .section = "JingFM",
+            .key = "uid",
+            .val.i = &playlist_conf.jing_uid
+        },
     };
     fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
 
