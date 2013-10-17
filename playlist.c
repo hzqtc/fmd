@@ -33,7 +33,7 @@ static fm_song_t* fm_song_parse_json(struct json_object *obj)
 {
     fm_song_t *song = (fm_song_t*) malloc(sizeof(fm_song_t));
     song->title = strdup(json_object_get_string(json_object_object_get(obj, "title")));
-    printf("parsed title\n");
+    /*printf("parsed title\n");*/
     song->artist = strdup(json_object_get_string(json_object_object_get(obj, "artist")));
     song->kbps = strdup(json_object_get_string(json_object_object_get(obj, "kbps")));
     song->album = strdup(json_object_get_string(json_object_object_get(obj, "albumtitle")));
@@ -232,14 +232,14 @@ static struct json_object* fm_playlist_send_long_report(fm_playlist_t *pl, int s
                 "\"url\":\"file:{path}\""
                 "}}' $(find $'%s' -type f -name '*.mp3' | shuf | head -n '%d');"
                 "echo -n ']}';"
-                , pl->config.uid, escapesh(bmd, pl->config.music_dir), local_channel_fetch_number);
+                , sid, escapesh(bmd, pl->config.music_dir), local_channel_fetch_number);
         printf("Cmd is: %s\n", cmd);
         FILE *f = popen(cmd, "r");
         if (f) {
             int size = sizeof(curl_buffer.data), len;
             memset(curl_buffer.data, 0, size);
             while ((len = strlen(curl_buffer.data)) <= size - 1  && fgets(curl_buffer.data + len, size - len, f) != NULL);
-            printf("Local music information retrieved: %s\n", curl_buffer.data);
+            /*printf("Local music information retrieved: %s\n", curl_buffer.data);*/
             pclose(f);
 
             obj = json_tokener_parse(curl_buffer.data);
@@ -327,9 +327,10 @@ fm_song_t* fm_playlist_next(fm_playlist_t *pl)
     int sid = 0;
     printf("Playlist next song\n");
     if (pl->playlist) {
-        fm_playlist_history_add(pl, pl->playlist, 'e');
-        if (pl->config.channel != local_channel)
+        if (pl->config.channel != local_channel) {
+            fm_playlist_history_add(pl, pl->playlist, 'e');
             fm_playlist_send_short_report(pl, sid, 'e');
+        }
         fm_playlist_next_on_link(pl, sid);
     }
     else {
@@ -346,14 +347,15 @@ fm_song_t* fm_playlist_skip(fm_playlist_t *pl, int force_refresh)
     printf("Playlist skip song\n");
     if (pl->playlist) {
         sid = pl->playlist->sid;
-        fm_playlist_history_add(pl, pl->playlist, 's');
-        if (!force_refresh && pl->config.channel == local_channel) {
+        if (pl->config.channel != local_channel) {
+            fm_playlist_history_add(pl, pl->playlist, 's');
+        } else if (!force_refresh) {
             // same action as n
             fm_playlist_next_on_link(pl, sid);
-        } else {
-            fm_playlist_clear(pl);
-            fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 's'));
+            return pl->playlist;
         }
+        fm_playlist_clear(pl);
+        fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 's'));
         return pl->playlist;
     }
     else
@@ -366,10 +368,10 @@ fm_song_t* fm_playlist_ban(fm_playlist_t *pl)
     printf("Playlist ban song\n");
     if (pl->playlist) {
         sid = pl->playlist->sid;
-        fm_playlist_history_add(pl, pl->playlist, 'b');
         if (pl->config.channel == local_channel) {
             fm_playlist_remove(pl, sid);
         } else {
+            fm_playlist_history_add(pl, pl->playlist, 'b');
             fm_playlist_clear(pl);
             fm_playlist_parse_json(pl, fm_playlist_send_long_report(pl, sid, 'b'));
         }

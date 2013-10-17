@@ -129,7 +129,7 @@ void fm_server_run(fm_server_t *server, server_handle handle, void *handle_data)
             }
             else {
                 getPeerInfo(client, ipstr, sizeof(ipstr), &port);
-                printf("Server has a new client from %s:%d\n", ipstr, port);
+                /*printf("Server has a new client from %s:%d\n", ipstr, port);*/
                 FD_SET(client, &server->fds);
                 if (client > server->fd_max) {
                     server->fd_max = client;
@@ -144,14 +144,14 @@ void fm_server_run(fm_server_t *server, server_handle handle, void *handle_data)
                 buf_size = recv(i, input_buf, sizeof(input_buf), 0);
                 if (buf_size == 0) {
                     getPeerInfo(client, ipstr, sizeof(ipstr), &port);
-                    printf("Server says goodbye to client from %s:%d\n", ipstr, port);
+                    /*printf("Server says goodbye to client from %s:%d\n", ipstr, port);*/
                     close(i);
                     FD_CLR(i, &server->fds);
                 }
                 else if (buf_size > 0) {
                     trim(input_buf);
                     getPeerInfo(client, ipstr, sizeof(ipstr), &port);
-                    printf("Server receives from client %s:%d => %s\n", ipstr, port, input_buf);
+                    /*printf("Server receives from client %s:%d => %s\n", ipstr, port, input_buf);*/
                     memset(output_buf, 0, sizeof(output_buf));
                     handle(handle_data, input_buf, output_buf);
                     buf_size = strlen(output_buf);

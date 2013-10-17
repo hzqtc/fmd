@@ -31,7 +31,7 @@ static size_t download_callback(char *ptr, size_t size, size_t nmemb, void *user
 
         if (pl->download.tmpstream) {
             fwrite(ptr, size, nmemb, pl->download.tmpstream);
-            printf("Appended transfer of size %d \n", (int) bytes);
+            /*printf("Appended transfer of size %d \n", (int) bytes);*/
         } 
 
         mpg123_feed(pl->mh, (unsigned char*) ptr, bytes);
@@ -137,7 +137,7 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
     pl->curl = curl_easy_init();
     curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, download_callback);
     curl_easy_setopt(pl->curl, CURLOPT_CONNECTTIMEOUT, 10);
-    curl_easy_setopt(pl->curl, CURLOPT_VERBOSE, 1);
+    /*curl_easy_setopt(pl->curl, CURLOPT_VERBOSE, 1);*/
     curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, pl);
     curl_easy_setopt(pl->curl, CURLOPT_HEADER, 1);
 
@@ -237,7 +237,6 @@ int fm_player_set_url(fm_player_t *pl, fm_song_t *song)
 
     char *url = song->audio;
 
-    FILE *tmpstream_old = pl->download.tmpstream;
     // remove the last tmp file
     if (strncmp(url, "file:/", 6) == 0) {
         pl->download.tmpstream = NULL;
