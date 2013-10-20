@@ -33,8 +33,23 @@ static size_t download_callback(char *ptr, size_t size, size_t nmemb, void *user
             fwrite(ptr, size, nmemb, pl->download.tmpstream);
             /*printf("Appended transfer of size %d \n", (int) bytes);*/
         } 
-
-        mpg123_feed(pl->mh, (unsigned char*) ptr, bytes);
+        switch(pl->mode) {
+            case plMP3:
+                mpg123_feed(pl->mh, (unsigned char*) ptr, bytes);
+                break;
+            case plMP4:{
+                char *start = pl->avpkt.data + pl->avpkt.size;
+                if (start + bytes <= (char *) pl->inbuf + sizeof(pl->inbuf)) {
+                    // just append it to the buf
+                    printf("Appending to avptk buffer\n");
+                    memcpy(start, ptr, bytes);
+                    pl->avpkt.size += bytes;
+                } else {
+                    printf("Buffer full. Cannot add to buffer anymore\n");
+                }
+                break;
+           }
+        }
         pthread_cond_signal(&pl->cond_play);
     }
     return bytes;
@@ -47,8 +62,14 @@ static void* download_thread(void *data)
     curl_easy_perform(pl->curl);
     pthread_cond_signal(&pl->cond_play);
 
-    mpg123_set_filesize(pl->mh, pl->info.file_size);
-    pl->info.samples = mpg123_length(pl->mh);
+    switch(pl->mode) {
+        case plMP3:
+            mpg123_set_filesize(pl->mh, pl->info.file_size);
+            pl->info.samples = mpg123_length(pl->mh);
+            break;
+        case plMP4:
+            break;
+    }
 
     return pl;
 }
@@ -73,36 +94,75 @@ static void* play_thread(void *data)
             break;
         }
 
-        err = mpg123_decode_frame(pl->mh, &off, &audio, &size);
-        switch (err) {
-            case MPG123_OK:
-                ao_play(pl->dev, (char*) audio, size);
+        switch (pl->mode) {
+            case plMP3:
+                err = mpg123_decode_frame(pl->mh, &off, &audio, &size);
+                switch (err) {
+                    case MPG123_OK:
+                        ao_play(pl->dev, (char*) audio, size);
+                        break;
+                    case MPG123_NEED_MORE:
+                        if (pthread_kill(pl->tid_dl, 0) == 0) {
+                            pthread_mutex_lock(&pl->mutex_status);
+                            pthread_cond_wait(&pl->cond_play, &pl->mutex_status);
+                            pthread_mutex_unlock(&pl->mutex_status);
+                        } else {
+                            if (pl->tid_ack > 0) {
+                                pthread_kill(pl->tid_ack, pl->sig_ack);
+                            }
+                            return pl;
+                        }
+                        break;
+                    case MPG123_NEW_FORMAT:
+                        break;
+                    default:
+                        fprintf(stderr, "mpg123 deocde return: %d\n", err);
+                        break;
+                }
                 break;
-            case MPG123_NEED_MORE:
-                if (pthread_kill(pl->tid_dl, 0) == 0) {
+            case plMP4: {
+                int got_frame = 0;
+                avcodec_get_frame_defaults(pl->decoded_frame);
+
+                int len = avcodec_decode_audio4(pl->context, pl->decoded_frame, &got_frame, &pl->avpkt);
+                if (len >= 0 && got_frame) {
+                    /* if a frame has been decoded, output it */
+                    int data_size = av_samples_get_buffer_size(NULL, pl->context->channels,
+                                                               pl->decoded_frame->nb_samples,
+                                                               pl->context->sample_fmt, 1);
+                    ao_play(pl->dev, (char *) pl->decoded_frame->data[0], data_size);
+                    printf("Successfully played a frame for the audio!\n");
+                    pl->avpkt.size -= len;
+                    pl->avpkt.data += len;
+                    pl->avpkt.dts =
+                    pl->avpkt.pts = AV_NOPTS_VALUE;
+                    if (pl->inbuf + sizeof(pl->inbuf) - pl->avpkt.data < AUDIO_REFILL_THRESH) {
+                        /* Refill the input buffer, to avoid trying to decode
+                         * incomplete frames. Instead of this, one could also use
+                         * a parser, or use a proper container format through
+                         * libavformat. */
+                        memmove(pl->inbuf, pl->avpkt.data, pl->avpkt.size);
+                        pl->avpkt.data = pl->inbuf;
+                    }
+                } else if (pthread_kill(pl->tid_dl, 0) == 0) {
                     pthread_mutex_lock(&pl->mutex_status);
                     pthread_cond_wait(&pl->cond_play, &pl->mutex_status);
                     pthread_mutex_unlock(&pl->mutex_status);
-                }
-                else {
+                } else {
                     if (pl->tid_ack > 0) {
                         pthread_kill(pl->tid_ack, pl->sig_ack);
                     }
                     return pl;
                 }
                 break;
-            case MPG123_NEW_FORMAT:
-                break;
-            default:
-                fprintf(stderr, "mpg123 deocde return: %d\n", err);
-                break;
+            }
         }
     }
 
     return pl;
 }
 
-int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
+int fm_player_open(fm_player_t *pl, fm_player_config_t *config, fm_playlist_t *playlist)
 {
     pl->config = *config;
 
@@ -152,6 +212,18 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
     sprintf(pl->download.tmpstream_path, "%s/%s", config->tmp_dir, tmpstream_fname);
     sprintf(pl->download.tmpimage_path, "%s/%s", config->tmp_dir, tmpimage_fname);
 
+    // wiring up the playlist
+    pl->playlist = playlist;
+
+    // setting up the packet
+    av_init_packet(&pl->avpkt);
+    // wiring up the input buf
+    pl->avpkt.data = pl->inbuf;
+    if (!(pl->decoded_frame = avcodec_alloc_frame())) {
+        fprintf(stderr, "Could not allocate audio frame\n");
+        exit(1);
+    }
+
     return 0;
 }
 
@@ -181,11 +253,6 @@ int fm_player_set_url(fm_player_t *pl, fm_song_t *song)
         fm_player_stop(pl);
     }
 
-    if (!song) {
-        printf("No song to play\n");
-        return -1;
-    }
-
     // close the file handler first
     if (pl->download.tmpstream) {
         fclose(pl->download.tmpstream);
@@ -209,7 +276,7 @@ int fm_player_set_url(fm_player_t *pl, fm_song_t *song)
                         "src=$'%s';"
                         "artist=$'%s'; title=$'%s'; album=$'%s'; date='%d';"
                         "[[ \"$date\" =~ [0-9]{4} ]] && datearg=\"--release-year $date\" || datearg=;"
-                        "dest=$'%s'\"/${artist//\\//|}/${title//\\//|}.mp3\";"
+                        "dest=$'%s'\"/${artist//\\//|}/${title//\\//|}.%s\";"
                         "[ -f \"$dest\" ] && exit 0;"
                         "mkdir -p \"$(dirname \"$dest\")\";"
                         "mv -f \"$src\" \"$dest\";" 
@@ -225,7 +292,8 @@ int fm_player_set_url(fm_player_t *pl, fm_song_t *song)
                         escapesh(btitle, pl->download.title), 
                         escapesh(balb, pl->download.album), 
                         pl->download.pubdate,
-                        escapesh(bmd, pl->config.music_dir),
+                        escapesh(bmd, pl->playlist->config.music_dir),
+                        pl->mode == plMP3 ? "mp3" : "m4a",
                         escapesh(btm, pl->download.tmpimage_path), 
                         escapesh(bcover, pl->download.cover),
                         escapesh(burl, pl->download.url));
@@ -235,10 +303,54 @@ int fm_player_set_url(fm_player_t *pl, fm_song_t *song)
         }
     } 
 
+    if (!song) {
+        printf("No song to play\n");
+        return -1;
+    }
+
     char *url = song->audio;
+    // set the mode depending the type of the file
+    // a simple check on the extension
+    // we need to determine the codec to use for the specific input stream
+    printf("Determining the stream format\n");
+    char *ext = url + strlen(url) - 4;
+    printf("Extension is %s\n", ext);
+    if (strcmp(ext, ".mp3") == 0) {
+        printf("mp3 determined\n");
+        pl->mode = plMP3;
+    } else if (strcmp(ext, ".m4a") == 0) {
+        printf("mp4 determined\n");
+        pl->mode = plMP4;
+        // initialize the m4a related avcodec details
+        /* find the mpeg audio decoder */
+        pl->codec = avcodec_find_decoder(AV_CODEC_ID_AAC);
+        if (!pl->codec) {
+            fprintf(stderr, "Codec not found\n");
+            exit(1);
+        }
+        printf("try to alloc context\n");
+        pl->context = avcodec_alloc_context3(pl->codec);
+        printf("context set\n");
+        if (!pl->context) {
+            fprintf(stderr, "Could not allocate audio codec context\n");
+            exit(1);
+        }
+        /* open it */
+        printf("try to open codec\n");
+        if (avcodec_open2(pl->context, pl->codec, NULL) < 0) {
+            fprintf(stderr, "Could not open codec\n");
+            exit(1);
+        }
+        pl->avpkt.size = 0;
+        // reset all input buf
+        memset(pl->inbuf, 0, sizeof(pl->inbuf));
+    } else {
+        printf("Unknown stream type\n");
+        return -1;
+    }
 
     // remove the last tmp file
-    if (strncmp(url, "file:/", 6) == 0) {
+    if (pl->playlist->config.mode == plLocal) {
         pl->download.tmpstream = NULL;
     } else {
         pl->download.tmpstream = fopen(pl->download.tmpstream_path, "w");
@@ -264,12 +376,22 @@ void fm_player_set_ack(fm_player_t *pl, pthread_t tid, int sig)
 
 int fm_player_pos(fm_player_t *pl)
 {
-    return mpg123_tell(pl->mh) / pl->config.rate;
+    switch (pl->mode) {
+        case plMP3:
+            return mpg123_tell(pl->mh) / pl->config.rate;
+        case plMP4:
+            return 0;
+    }
 }
 
 int fm_player_length(fm_player_t *pl)
 {
-    return pl->info.samples / pl->config.rate;
+    switch (pl->mode) {
+        case plMP3:
+            return pl->info.samples / pl->config.rate;
+        case plMP4:
+            return 0;
+    }
 }
 
 void fm_player_play(fm_player_t *pl)
@@ -318,6 +440,7 @@ void fm_player_init()
 {
     ao_initialize();
     mpg123_init();
+    avcodec_register_all();
 }
 
 void fm_player_exit()

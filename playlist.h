@@ -4,6 +4,12 @@
 #include <curl/curl.h>
 #define local_channel "999"
 
+typedef enum {
+    plLocal,
+    plDouban,
+    plJing
+} fm_playlist_mode;
+
 typedef struct fm_song {
     char *title;
     char *artist;
@@ -25,14 +31,20 @@ typedef struct fm_history {
 } fm_history_t;
 
 typedef struct {
-    char *channel;
+    char channel[64];
+    fm_playlist_mode mode;
+
+    // douban mode
     int douban_uid;
     char uname[16];
     char douban_token[16];
     int expire;
     char kbps[8];
+
+    // local mode
     char music_dir[128];
 
+    // jing mode
     int jing_uid;
     char jing_atoken[50];
     char jing_rtoken[50];
@@ -42,16 +54,16 @@ typedef struct {
     fm_history_t *history;
     fm_song_t *playlist;
 
+    // douban mode
     char *douban_api;
     char *douban_channel_api;
-
-    char *jing_api;
-
     char *app_name;
     char *version;
 
-    fm_playlist_config_t config;
+    // jing mode
+    char *jing_api;
 
+    fm_playlist_config_t config;
     CURL* curl;
 } fm_playlist_t;
 

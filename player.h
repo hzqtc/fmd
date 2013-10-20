@@ -5,9 +5,11 @@
 #include <mpg123.h>
 #include <ao/ao.h>
 #include <curl/curl.h>
-
 #include <pthread.h>
+#include <libavcodec/avcodec.h>
 
+#define AUDIO_INBUF_SIZE 20480
+#define AUDIO_REFILL_THRESH 4096
 enum fm_player_status {
     FM_PLAYER_PLAY,
     FM_PLAYER_PAUSE,
@@ -23,10 +25,10 @@ typedef struct {
     int rate;
     int channels;
     int encoding;
-    char music_dir[128];
-    char tmp_dir[128];
     char driver[16];
     char dev[16];
+    // for local mode
+    char tmp_dir[128];
 } fm_player_config_t;
 
 typedef struct {
@@ -38,18 +40,35 @@ typedef struct {
     char url[128];
     int like;
 
-    // file related action
+    // local mode
     FILE *tmpstream;
     char tmpstream_path[128];
     char tmpimage_path[128];
 } fm_download_info_t;
+
+typedef enum {
+    plMP3,
+    plMP4
+} fm_player_mode;
 
 typedef struct fm_player {
     mpg123_handle *mh;
     ao_device *dev;
     CURL *curl;
 
-    // encapsulating all the necessary information for downloading purposes
+    // the mode that dictates the stream format
+    fm_player_mode mode;
+
+    // the more complicated avcodec data
+    AVCodec *codec;
+    AVCodecContext *context;
+    uint8_t inbuf[AUDIO_INBUF_SIZE + FF_INPUT_BUFFER_PADDING_SIZE];
+    AVPacket avpkt;
+    AVFrame *decoded_frame;
+
+    // for referring to some of the attributes in the playlist
+    fm_playlist_t *playlist;
+    // for local mode
     fm_download_info_t download;
 
     fm_player_info_t info;
@@ -80,7 +99,7 @@ void fm_player_pause(fm_player_t *pl);
 void fm_player_toggle(fm_player_t *pl);
 void fm_player_stop(fm_player_t *pl);
 
-int fm_player_open(fm_player_t *pl, fm_player_config_t *config);
+int fm_player_open(fm_player_t *pl, fm_player_config_t *config, fm_playlist_t *playlist);
 void fm_player_close(fm_player_t *pl);
 void fm_player_init();
 void fm_player_exit();

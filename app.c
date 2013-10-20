@@ -38,7 +38,7 @@ void get_fm_info(fm_app_t *app, char *output)
         case FM_PLAYER_PAUSE:
             current = fm_playlist_current(&app->playlist);
             char btitle[128], bart[128], balb[128], bcover[128], burl[128]; 
-            sprintf(output, "{\"status\":\"%s\",\"kbps\":\"%s\",\"channel\":%d,\"user\":\"%s\","
+            sprintf(output, "{\"status\":\"%s\",\"kbps\":\"%s\",\"channel\":\"%s\",\"user\":\"%s\","
                     "\"title\":\"%s\",\"artist\":\"%s\", \"album\":\"%s\",\"year\":%d,"
                     "\"cover\":\"%s\",\"url\":\"%s\",\"sid\":%d,"
                     "\"like\":%d,\"pos\":%d,\"len\":%d}",
@@ -54,7 +54,7 @@ void get_fm_info(fm_app_t *app, char *output)
                     fm_player_length(&app->player));
             break;
         case FM_PLAYER_STOP:
-            sprintf(output, "{\"status\":\"stop\",\"kbps\":%s,\"channel\":%d,\"user\":\"%s\"}",
+            sprintf(output, "{\"status\":\"stop\",\"kbps\":%s,\"channel\":\"%s\",\"user\":\"%s\"}",
                     app->playlist.config.kbps,app->playlist.config.channel, app->playlist.config.uname);
             break;
         default:
@@ -130,6 +130,16 @@ void app_client_handler(void *ptr, char *input, char *output)
         else {
             if (strcmp(arg, app->playlist.config.channel) != 0) {
                 strcpy(app->playlist.config.channel, arg);
+                char *address;
+                strtol(arg, &address, 10);
+                if (*address == '\0') {
+                    // this is valid number
+                    if (strcmp(app->playlist.config.channel, local_channel) == 0)
+                        app->playlist.config.mode = plLocal;
+                    else
+                        app->playlist.config.mode = plDouban;
+                } else
+                    app->playlist.config.mode = plJing;
                 if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 1)) == 0)
                     fm_player_play(&app->player);
             }
@@ -137,22 +147,21 @@ void app_client_handler(void *ptr, char *input, char *output)
         }
     }
     else if(strcmp(cmd, "kbps") == 0) {
-        if (arg == NULL) {
-            sprintf(output, "{\"status\":\"error\",\"message\":\"Missing argument: %s\"}", input);
-        }
-        else if (strcmp(arg, "64") != 0 || strcmp(arg, "128") != 0 || strcmp(arg, "192") != 0) {
-            sprintf(output, "{\"status\":\"error\",\"message\":\"Wrong argument: %s\"}", arg);
-        }
-        else if (app->playlist.config.channel == local_channel) {
-            printf("Switching music quality for local music station is currently not supported (for performance reasons)\n");
-        }
-        else {
-            if (strcmp(arg, app->playlist.config.kbps) != 0) {
-                strcpy(app->playlist.config.kbps, arg);
-                if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0)) == 0)
-                    fm_player_play(&app->player);
+        if (app->playlist.config.mode == plDouban) {
+            if (arg == NULL) {
+                sprintf(output, "{\"status\":\"error\",\"message\":\"Missing argument: %s\"}", input);
             }
-            get_fm_info(app, output);
+            else if (strcmp(arg, "64") != 0 || strcmp(arg, "128") != 0 || strcmp(arg, "192") != 0) {
+                sprintf(output, "{\"status\":\"error\",\"message\":\"Wrong argument: %s\"}", arg);
+            }
+            else {
+                if (strcmp(arg, app->playlist.config.kbps) != 0) {
+                    strcpy(app->playlist.config.kbps, arg);
+                    if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0)) == 0)
+                        fm_player_play(&app->player);
+                }
+                get_fm_info(app, output);
+            }
         }
     }
     else if(strcmp(cmd, "website") == 0) {
@@ -229,7 +238,7 @@ void install_player_end_handler(fm_player_t *player)
 int start_fmd(fm_playlist_config_t *playlist_conf, fm_player_config_t *player_conf)
 {
     fm_player_init();
-    if (fm_player_open(&app.player, player_conf) < 0) {
+    if (fm_player_open(&app.player, player_conf, &app.playlist) < 0) {
         perror("Open audio output");
         return 1;
     }
@@ -275,6 +284,7 @@ int main() {
 
     fm_playlist_config_t playlist_conf = {
         .channel = "0",
+        .mode = plDouban,
         .douban_uid = 0,
         .uname = "",
         .douban_token = "",
@@ -291,7 +301,6 @@ int main() {
         .encoding = MPG123_ENC_SIGNED_16,
         .driver = "alsa",
         .dev = "default",
-        .music_dir = "~/Music",
         .tmp_dir = "/tmp"
     };
     fm_config_t configs[] = {
@@ -391,7 +400,7 @@ int main() {
             .section = "JingFM",
             .key = "uid",
             .val.i = &playlist_conf.jing_uid
-        },
+        }
     };
     fm_config_parse(config_file, configs, sizeof(configs) / sizeof(fm_config_t));
 
@@ -399,7 +408,6 @@ int main() {
     wordexp_t exp_result;
     wordexp(playlist_conf.music_dir, &exp_result, 0);
     strcpy(playlist_conf.music_dir, exp_result.we_wordv[0]);
-    strcpy(player_conf.music_dir, exp_result.we_wordv[0]);
     printf("The music dir path: %s\n", playlist_conf.music_dir);
 
     wordexp(player_conf.tmp_dir, &exp_result, 0);
