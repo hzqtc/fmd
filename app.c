@@ -1,5 +1,6 @@
 #include "server.h"
 #include "player.h"
+#include "playlist.h"
 #include "config.h"
 #include "util.h"
 
@@ -69,7 +70,7 @@ void app_client_handler(void *ptr, char *input, char *output)
     char *arg = split(input, ' ');
 
     if (strcmp(cmd, "play") == 0) {
-        if (app->player.status != FM_PLAYER_STOP || fm_player_set_url(&app->player, fm_playlist_current(&app->playlist)) == 0) {
+        if (app->player.status != FM_PLAYER_STOP || fm_player_set_song(&app->player, fm_playlist_current(&app->playlist)) == 0) {
             fm_player_play(&app->player);
         }
         get_fm_info(app, output);
@@ -91,30 +92,28 @@ void app_client_handler(void *ptr, char *input, char *output)
                 fm_player_play(&app->player);
                 break;
             case FM_PLAYER_STOP:
-                if (fm_player_set_url(&app->player, fm_playlist_current(&app->playlist)) == 0)
+                if (fm_player_set_song(&app->player, fm_playlist_current(&app->playlist)) == 0)
                     fm_player_play(&app->player);
                 break;
         }
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "skip") == 0 || strcmp(cmd, "next") == 0) {
-        if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0)) == 0)
+        if (fm_player_set_song(&app->player, fm_playlist_skip(&app->playlist, 0)) == 0)
             fm_player_play(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "ban") == 0) {
-        if (fm_player_set_url(&app->player, fm_playlist_ban(&app->playlist)) == 0)
+        if (fm_player_set_song(&app->player, fm_playlist_ban(&app->playlist)) == 0)
             fm_player_play(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "rate") == 0) {
         fm_playlist_rate(&app->playlist);
-        fm_player_download_info_rate(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "unrate") == 0) {
         fm_playlist_unrate(&app->playlist);
-        fm_player_download_info_unrate(&app->player);
         get_fm_info(app, output);
     }
     else if(strcmp(cmd, "info") == 0) {
@@ -135,19 +134,19 @@ void app_client_handler(void *ptr, char *input, char *output)
                 if (*address == '\0') {
                     // this is valid number
                     if (strcmp(app->playlist.config.channel, local_channel) == 0)
-                        app->playlist.config.mode = plLocal;
+                        app->playlist.mode = plLocal;
                     else
-                        app->playlist.config.mode = plDouban;
+                        app->playlist.mode = plDouban;
                 } else
-                    app->playlist.config.mode = plJing;
-                if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 1)) == 0)
+                    app->playlist.mode = plJing;
+                if (fm_player_set_song(&app->player, fm_playlist_skip(&app->playlist, 1)) == 0)
                     fm_player_play(&app->player);
             }
             get_fm_info(app, output);
         }
     }
     else if(strcmp(cmd, "kbps") == 0) {
-        if (app->playlist.config.mode == plDouban) {
+        if (app->playlist.mode == plDouban) {
             if (arg == NULL) {
                 sprintf(output, "{\"status\":\"error\",\"message\":\"Missing argument: %s\"}", input);
             }
@@ -157,7 +156,7 @@ void app_client_handler(void *ptr, char *input, char *output)
             else {
                 if (strcmp(arg, app->playlist.config.kbps) != 0) {
                     strcpy(app->playlist.config.kbps, arg);
-                    if (fm_player_set_url(&app->player, fm_playlist_skip(&app->playlist, 0)) == 0)
+                    if (fm_player_set_song(&app->player, fm_playlist_skip(&app->playlist, 0)) == 0)
                         fm_player_play(&app->player);
                 }
                 get_fm_info(app, output);
@@ -220,7 +219,7 @@ void daemonize(const char *log_file, const char *err_file)
 
 void player_end_handler(int sig)
 {
-    if (fm_player_set_url(&app.player, fm_playlist_next(&app.playlist)) == 0)
+    if (fm_player_set_song(&app.player, fm_playlist_next(&app.playlist)) == 0)
         fm_player_play(&app.player);
 }
 
@@ -235,16 +234,21 @@ void install_player_end_handler(fm_player_t *player)
     fm_player_set_ack(player, pthread_self(), player_end_sig);
 }
 
+void stop_player()
+{
+    fm_player_stop(&app.player);
+}
+
 int start_fmd(fm_playlist_config_t *playlist_conf, fm_player_config_t *player_conf)
 {
     fm_player_init();
-    if (fm_player_open(&app.player, player_conf, &app.playlist) < 0) {
+    if (fm_player_open(&app.player, player_conf) < 0) {
         perror("Open audio output");
         return 1;
     }
     install_player_end_handler(&app.player);
 
-    fm_playlist_init(&app.playlist, playlist_conf);
+    fm_playlist_init(&app.playlist, playlist_conf, stop_player);
 
     if (fm_server_setup(&app.server) < 0) {
         perror("Server");
@@ -284,7 +288,6 @@ int main() {
 
     fm_playlist_config_t playlist_conf = {
         .channel = "0",
-        .mode = plDouban,
         .douban_uid = 0,
         .uname = "",
         .douban_token = "",
@@ -298,10 +301,8 @@ int main() {
     fm_player_config_t player_conf = {
         .rate = 44100,
         .channels = 2,
-        .encoding = MPG123_ENC_SIGNED_16,
         .driver = "alsa",
         .dev = "default",
-        .tmp_dir = "/tmp"
     };
     fm_config_t configs[] = {
         {
@@ -345,12 +346,6 @@ int main() {
             .section = "Download",
             .key = "music_dir",
             .val.s = playlist_conf.music_dir
-        },
-        {
-            .type = FM_CONFIG_STR,
-            .section = "Download",
-            .key = "tmp_dir",
-            .val.s = player_conf.tmp_dir
         },
         {
             .type = FM_CONFIG_STR,
@@ -409,9 +404,6 @@ int main() {
     wordexp(playlist_conf.music_dir, &exp_result, 0);
     strcpy(playlist_conf.music_dir, exp_result.we_wordv[0]);
     printf("The music dir path: %s\n", playlist_conf.music_dir);
-
-    wordexp(player_conf.tmp_dir, &exp_result, 0);
-    strcpy(player_conf.tmp_dir, exp_result.we_wordv[0]);
 
     wordfree(&exp_result);
     return start_fmd(&playlist_conf, &player_conf);

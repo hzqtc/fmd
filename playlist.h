@@ -1,27 +1,36 @@
 #ifndef _FM_PLAYLIST_H_
 #define _FM_PLAYLIST_H_
 
+#include "downloader.h"
 #include <curl/curl.h>
 #define local_channel "999"
+// out of them 1 is used for emergency (when all downloaders are downloading
+#define N_SONG_DOWNLOADERS 2
 
-typedef enum {
+enum fm_playlist_mode {
     plLocal,
     plDouban,
     plJing
-} fm_playlist_mode;
+};
 
 typedef struct fm_song {
-    char *title;
-    char *artist;
-    char *album;
+    char title[128];
+    char artist[128];
+    char album[128];
     int pubdate;
-    char *cover;
-    char *url;
-    char *audio;
-    char *kbps;
+    char cover[128];
+    char url[128];
+    char audio[128];
+    char kbps[8];
     int sid;
     int like;
     struct fm_song *next;
+    // the total length for the song (in seconds)
+    int length;
+    // the corresponding file path for this song
+    char filepath[128];
+    // the corresponding downloader (null if it's not being downloaded)
+    downloader_t *downloader;
 } fm_song_t;
 
 typedef struct fm_history {
@@ -32,7 +41,6 @@ typedef struct fm_history {
 
 typedef struct {
     char channel[64];
-    fm_playlist_mode mode;
 
     // douban mode
     int douban_uid;
@@ -51,10 +59,12 @@ typedef struct {
 } fm_playlist_config_t;
 
 typedef struct {
-    fm_history_t *history;
-    fm_song_t *playlist;
+    // the current playlist mode
+    enum fm_playlist_mode mode;
+    fm_song_t *current;
 
     // douban mode
+    fm_history_t *history;
     char *douban_api;
     char *douban_channel_api;
     char *app_name;
@@ -64,10 +74,23 @@ typedef struct {
     char *jing_api;
 
     fm_playlist_config_t config;
-    CURL* curl;
+
+    // the downloader stack will handle all the download tasks
+    downloader_stack_t *stack;
+
+    // holding a reference to the stop function; needs to be provided by the delegate
+    void (*fm_player_stop)();
+    //// song download section
+    downloader_t *song_downloaders[N_SONG_DOWNLOADERS];
+    // a flag telling the song download thread to stop download
+    int song_download_stop;
+    pthread_t tid_download;
+    fm_song_t *current_download;
+    pthread_mutex_t mutex_song_download_stop;
+    pthread_cond_t cond_song_download_restart;
 } fm_playlist_t;
 
-void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config);
+void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config, void (*fm_player_stop)());
 void fm_playlist_cleanup(fm_playlist_t *pl);
 
 fm_song_t* fm_playlist_current(fm_playlist_t *pl);

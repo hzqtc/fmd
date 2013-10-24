@@ -22,6 +22,7 @@ parser.add_argument('format', nargs=1, help='''a format string containing one or
                                                     , {payment_url}
                                                     , {publisher_url}
                                                     , {copyright_url}
+                                                    , {len} (the length of the audio file, in seconds)
                                                     , {path} (the absolute path of the file)''');
 parser.add_argument('audiofile', nargs='+', help='an audio file containing the ID3 tags');
 
@@ -47,9 +48,11 @@ for f in args.audiofile:
     file = eyed3.load(f)
     path = unicode(os.path.realpath(f.decode('utf-8')))
     kbps = artist = title = album = track = release_date = publisher = artist_url = audio_source_url = audio_file_url = internet_radio_url = commercial_url = payment_url = publisher_url = copyright_url  = ""
+    len = 0
     if file.info:
         kbps = re.findall(r'~(\d+)',file.info.bit_rate_str);
         kbps = kbps[0] if kbps else u"";
+        len = file.info.time_secs;
     if file.tag:
         artist = file.tag.artist
         title = file.tag.title
@@ -81,6 +84,7 @@ for f in args.audiofile:
             u'payment_url':payment_url,
             u'publisher_url':publisher_url,
             u'copyright_url':copyright_url,
+            u'len':len,
             u'path':path}
     if to_escape:
         for k in reps:
