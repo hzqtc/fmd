@@ -28,9 +28,8 @@ enum downloader_mode {
 typedef struct {
     enum downloader_mode mode;
     enum downloader_buffer_type btype;
-    int idle;
     // these two states are managed by the downloaders themselves so don't touch them
-    int stop;
+    int idle;
     int locked;
     // a data variable for recording custom data
     void *data;
@@ -48,8 +47,6 @@ void downloader_free(downloader_t *dl);
 void mdownloader_config(downloader_t *dl);
 void fdownloader_config(downloader_t *dl);
 void ddownloader_config(downloader_t *dl);
-// note if you are using a stack, you should use stack_downloader_stop instead
-void downloader_stop(downloader_t *dl);
 void downloader_config_mode(downloader_t *dl, enum downloader_mode m);
 
 // a downloader stack manages a set of downloaders and a multi_handle for all of them

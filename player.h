@@ -53,10 +53,10 @@ typedef struct fm_player {
     AVCodec *codec;
     AVCodecContext *context;
     AVPacket avpkt;
-    AVInputFormat *input_format;
-    AVIOContext *io_context;
-    unsigned char *iobuf;
-    unsigned char headerbuf[HEADERBUF_SIZE];
+    //AVInputFormat *input_format;
+    //AVIOContext *io_context;
+    //unsigned char *iobuf;
+    //unsigned char headerbuf[HEADERBUF_SIZE];
     AVFormatContext *format_context;
     int audio_stream_idx;
     // decoding

@@ -129,16 +129,7 @@ void app_client_handler(void *ptr, char *input, char *output)
         else {
             if (strcmp(arg, app->playlist.config.channel) != 0) {
                 strcpy(app->playlist.config.channel, arg);
-                char *address;
-                strtol(arg, &address, 10);
-                if (*address == '\0') {
-                    // this is valid number
-                    if (strcmp(app->playlist.config.channel, local_channel) == 0)
-                        app->playlist.mode = plLocal;
-                    else
-                        app->playlist.mode = plDouban;
-                } else
-                    app->playlist.mode = plJing;
+                fm_playlist_update_mode(&app->playlist);
                 if (fm_player_set_song(&app->player, fm_playlist_skip(&app->playlist, 1)) == 0)
                     fm_player_play(&app->player);
             }

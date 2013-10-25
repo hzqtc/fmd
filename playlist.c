@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <sys/stat.h>
+#include <errno.h>
 
 // Adding the new downloader interface
 // All newly retrieved songs are downloaded IMMEDIATELY
@@ -21,11 +23,47 @@ static void song_downloader_stop(fm_playlist_t *pl, downloader_t *dl)
 {
     stack_downloader_stop(pl->stack, dl);
     // clean up the state
-    fm_song_t *prev = (fm_song_t *)dl->data;
-    if (prev) {
-        prev->downloader = NULL;
+    fm_song_t *song = (fm_song_t *)dl->data;
+    if (song) {
+        song->downloader = NULL;
         dl->data = NULL;
     }
+}
+
+void fm_playlist_update_mode(fm_playlist_t *pl)
+{
+    char *address;
+    strtol(pl->config.channel, &address, 10);
+    if (*address == '\0') {
+        // this is valid number
+        if (strcmp(pl->config.channel, local_channel) == 0)
+            pl->mode = plLocal;
+        else
+            pl->mode = plDouban;
+    } else
+        pl->mode = plJing;
+}
+
+static void replace(char *str, char to_rep, char rep)
+{
+    while (*str != '\0') {
+        if (*str == to_rep) {
+            *str = rep;
+        }
+        str++;
+    }
+}
+
+static void get_file_path(char *buf, char *directory, char *artist, char *title, char *ext)
+{
+    replace(artist, '/', '|');
+    replace(title, '/', '|');
+    if (artist[0] == '\0')
+        artist = "Unknown";
+    if (title[0] == '\0')
+        title = "Unknown";
+    sprintf(buf, "%s/%s/%s.%s", directory, artist, title, ext);
+    printf("The obtained file path is %s\n", buf);
 }
 
 static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
@@ -38,16 +76,21 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
     // now check: if we should cache this song / if we should delete the tmp buffer associated with this song
     // we can run a length check to check if that matches the size given in the song
     if (song->like) {
-        if (pl->mode == plDouban || pl->mode == plJing) {
-            printf("Attemping to cache the song for path %s\n", song->filepath);
+        // run a simple check on whether there are any file present in the file system
+        char lp[128];
+        get_file_path(lp, pl->config.music_dir, song->artist, song->title, song->ext);
+        struct stat sts;
+        // must make sure that the tmp file exists and the dest file does not exist
+        if (song->filepath[0] != '\0' && stat(song->filepath, &sts) == 0 && (stat(lp, &sts) == -1 && errno == ENOENT)) {
+            printf("Attemping to cache the song for path %s\n", lp);
             // first move the file to a secure location to avoid it being truncated later
-            char cmd[2048], btp[128], bart[128], btitle[128], balb[128], bmd[128], bcover[128], burl[128]; 
+            char cmd[2048], btp[128], bart[128], btitle[128], balb[128], blp[128], bcover[128], burl[128]; 
             sprintf(cmd, 
                     "src=$'%s';"
                     "[ \"$(eyeD3f '{len}' \"$src\")\" != '%d' ] && exit 0;"
                     "artist=$'%s'; title=$'%s'; album=$'%s'; date='%d';"
                     "[[ \"$date\" =~ [0-9]{4} ]] && datearg=\"--release-year $date\" || datearg=;"
-                    "dest=$'%s'\"/${artist//\\//|}/${title//\\//|}.%s\";"
+                    "dest=$'%s';"
                     "[ -f \"$dest\" ] && exit 0;"
                     "mkdir -p \"$(dirname \"$dest\")\";"
                     "mv -f \"$src\" \"$dest\";" 
@@ -64,8 +107,7 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
                     escapesh(btitle, song->title), 
                     escapesh(balb, song->album), 
                     song->pubdate,
-                    escapesh(bmd, pl->config.music_dir),
-                    pl->mode == plDouban ? "mp3" : "m4a",
+                    escapesh(blp, lp),
                     escapesh(bcover, song->cover),
                     escapesh(burl, song->url));
             printf("Move and tag command: %s\n", cmd);
@@ -96,11 +138,12 @@ static fm_song_t* fm_song_douban_parse_json(fm_playlist_t *pl, struct json_objec
     song->sid = json_object_get_int(json_object_object_get(obj, "sid"));
     song->like = json_object_get_int(json_object_object_get(obj, "like"));
     song->length = json_object_get_int(json_object_object_get(obj, "length"));
+    song->filepath[0] = '\0';
+    strcpy(song->ext, "mp3");
     if (song->sid == 0) {
         fm_song_free(pl, song);
         song = NULL;
     }
-    song->filepath[0] = '\0';
     return song;
 }
 
@@ -159,6 +202,7 @@ static fm_song_t* fm_song_jing_parse_json(fm_playlist_t *pl, struct json_object 
     // jing does not provide a url link...
     song->url[0] = '\0';
     song->filepath[0] = '\0';
+    strcpy(song->ext, "m4a");
     // for like we need to retrieve again...
     song->like = 0;
     return song;
@@ -273,10 +317,12 @@ void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config, void (*fm
 
     pl->config = *config;
 
-    // wire up the player
-    pl->fm_player_stop = fm_player_stop;
+    // set up the mode
+    fm_playlist_update_mode(pl);
     // set up the downloader stack
     pl->stack = stack_init();
+    // wire up the player
+    pl->fm_player_stop = fm_player_stop;
     // set up the downloader stuff
     pl->song_download_stop = 0;
     pl->song_downloaders[0] = NULL;
@@ -287,9 +333,11 @@ void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config, void (*fm
 
 void fm_playlist_cleanup(fm_playlist_t *pl)
 {
-    stack_free(pl->stack);
     fm_playlist_hisotry_clear(pl);
     fm_playlist_clear(pl);
+    stack_free(pl->stack);
+    pthread_mutex_destroy(&pl->mutex_song_download_stop);
+    pthread_cond_destroy(&pl->cond_song_download_restart);
 }
 
 static int fm_playlist_douban_parse_json(fm_playlist_t *pl, struct json_object *obj)
@@ -424,8 +472,8 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl)
     char buf[512];
     sprintf(buf,
             "IFS=$'\\n';"
-            "eyeD3f '{title}\n{artist}\n{internet_radio_url}\n{album}\n{release_date}\n{picture}\n{kbps}\n{path}\n{len}' "
-            "$(find $'%s' -type f -name '*.mp3' | shuf | head -n '%d')"
+            "eyeD3f '{title}\n{artist}\n{internet_radio_url}\n{album}\n{release_date}\n{kbps}\n{path}\n{len}' "
+            "$(find $'%s' -type f -print0 | xargs -0 file -iF$'\t' | fgrep audio | cut -d$'\t' -f1 | shuf | head -n '%d')"
             , pl->config.music_dir, N_LOCAL_CHANNEL_FETCH);
     printf("Local channel refilling command is: %s\n", buf);
     // the field reference counter
@@ -434,29 +482,49 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl)
         printf("Failed to open the pipe for the command to find the local music\n");
         return -1;
     }
-    fm_song_t *song;
-    int fn = 0, fl = 9;
+    fm_song_t *song = NULL;
+    int fl = 8, fn = fl - 1;
     char ch = '\n', *lastf = NULL;
     int len = 0, size = 0;
     while (1) {
-        if (fn == 0) {
-            // push the last song
-            fm_playlist_push_front(pl, song);
-            song = (fm_song_t*) malloc(sizeof(fm_song_t));
-            song->sid = song->like = 1;
-        }
         // get the next character
-        if (ch == EOF)
-            break;
-        if (ch == '\n') {
-            if (lastf)
+        if (ch == '\n' || ch == EOF) {
+            if (lastf) {
                 // append the 0 at the end
                 lastf[len] = '\0';
-            if (fn == 4)
-                song->pubdate = atoi(lastf);
-            else if (fn == 8)
-                song->length = atoi(lastf);
+                switch (fn) {
+                    case 4: song->pubdate = atoi(lastf); break;
+                    case 6: {
+                        // ext is the ext given in the filepath
+                        char *p = lastf;
+                        int exti = -1;
+                        song->ext[0] = '\0';
+                        while (*p != '\0') {
+                            if (*p == '.') {
+                                exti = 0;
+                            } else if (exti >= 0) {
+                                song->ext[exti++] = *p;
+                            } 
+                            p++;
+                        }
+                        printf("Obtained extension: %s\n", song->ext);
+                        break;
+                    }
+                    case 7: song->length = atoi(lastf); break;
+                    default: break;
+                }
+
+            }
             printf("Obtained song field: %s for song %p\n", lastf, song);
+            if (fn == fl - 1) {
+                // push the last song
+                fm_playlist_push_front(pl, song);
+                if (ch == EOF)
+                    break; 
+                song = (fm_song_t*) malloc(sizeof(fm_song_t));
+                song->sid = song->like = 1;
+                song->cover[0] = '\0';
+            }
             fn = (fn+1) % fl;
             // set up the last field
             switch(fn) {
@@ -465,10 +533,9 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl)
                 case 2: lastf = song->url; size = sizeof(song->url); break;
                 case 3: lastf = song->album; size = sizeof(song->album); break;
                 case 4: lastf = buf; size = sizeof(buf); break;
-                case 5: lastf = song->cover; size = sizeof(song->cover); break;
-                case 6: lastf = song->kbps; size = sizeof(song->kbps); break;
-                case 7: lastf = song->filepath; size = sizeof(song->filepath); break;
-                case 8: lastf = buf; size = sizeof(buf); break;
+                case 5: lastf = song->kbps; size = sizeof(song->kbps); break;
+                case 6: lastf = song->filepath; size = sizeof(song->filepath); break;
+                case 7: lastf = buf; size = sizeof(buf); break;
             }
             len = 0;
         } else {
@@ -495,26 +562,38 @@ static void fm_playlist_curl_douban_config(fm_playlist_t *pl, CURL *curl, char a
     printf("Playlist request: %s\n", url);
 
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
     curl_easy_setopt(curl, CURLOPT_URL, url);
 }
 
-static int song_downloader_init(fm_playlist_t *pl, downloader_t *dl) {
-    song_downloader_stop(pl, dl);
-    if (pl->current_download) {
+// the recycle flag tells the function to reinit the states beforing proceeding
+static int song_downloader_init(fm_playlist_t *pl, downloader_t *dl, int recycle) {
+    if (recycle) {
+        song_downloader_stop(pl, dl);
         fdownloader_config(dl);
+    }
+    if (pl->current_download) {
         // set the url
+        printf("Setting the url %s(%s) for the song downloader %p\n", pl->current_download->audio, pl->current_download->title, dl);
+        // need to reset to get method ..deh
+        curl_easy_setopt(dl->curl, CURLOPT_HTTPGET, 1);
+        // reset headers
+        curl_easy_setopt(dl->curl, CURLOPT_HTTPHEADER, NULL);
         curl_easy_setopt(dl->curl, CURLOPT_URL, pl->current_download->audio);
+        printf("File path %s is copied to the song\n", dl->content.fbuf->filepath);
         strcpy(pl->current_download->filepath, dl->content.fbuf->filepath);
         pl->current_download->downloader = dl;
         dl->data = pl->current_download;
         pl->current_download = pl->current_download->next;
         return 0;
     }
+    printf("Current download is NULL. Skipping\n");
     return -1;
 }
 
 static downloader_t *process_download(downloader_stack_t *stack, downloader_t **start, int length, void *data)
 {
+    /*printf("Download process conditon begun\n");*/
     int i;
     fm_playlist_t *pl = (fm_playlist_t *)data;
     // we check for the existing state 
@@ -522,14 +601,17 @@ static downloader_t *process_download(downloader_stack_t *stack, downloader_t **
     pthread_mutex_lock(&pl->mutex_song_download_stop);
     if (pl->song_download_stop) {
         pl->song_download_stop = 0;
+        printf("Download process waiting for signal of restarting\n");
         pthread_cond_wait(&pl->cond_song_download_restart, &pl->mutex_song_download_stop);
     }
     pthread_mutex_unlock(&pl->mutex_song_download_stop);
     // perform any download if we can
     for (i=0; i<length; i++) {
+        /*printf("Looping through the downloaders\n");*/
         if (start[i]->idle) {
+            printf("Obtained idle song downloader\n");
             // reinitialize the downloaders and configure them
-            if (song_downloader_init(pl, start[i]) != 0) {
+            if (song_downloader_init(pl, start[i], 1) != 0) {
                 // no more download
                 int all_idle = 1;
                 for (i=0; i<length; i++) {
@@ -554,11 +636,13 @@ static downloader_t *process_download(downloader_stack_t *stack, downloader_t **
 
 static void* download_thread(void *data)
 {
-    // first get the downloaders
+    printf("Download thread started\n");
     fm_playlist_t *pl = (fm_playlist_t *)data;
-    stack_perform_until_condition_met(pl->stack, pl->song_downloaders, sizeof(pl->song_downloaders), pl, process_download);
-    // unlock all the downloaders
+    // first get the downloaders
     int i;
+    printf("Start performing\n");
+    stack_perform_until_condition_met(pl->stack, pl->song_downloaders, sizeof(pl->song_downloaders) / sizeof(downloader_t *), pl, process_download);
+    // unlock all the downloaders
     for (i=0; i<N_SONG_DOWNLOADERS; i++) {
         stack_downloader_unlock(pl->stack, pl->song_downloaders[i]);
     }
@@ -567,21 +651,33 @@ static void* download_thread(void *data)
 
 static void restart_song_downloaders(fm_playlist_t *pl)
 {
+    printf("Restarting the song downloaders\n");
     // set the flag to indicate the 
     pl->current_download = pl->current;
+    printf("Setting current download to %s / %s with url %s\n", pl->current_download->artist, pl->current_download->title, pl->current_download->audio);
     // signal the condition
     pthread_cond_signal(&pl->cond_song_download_restart);
+    // we should reset the stop flag to 0; because at this stage the download thread should definitely go on
+    song_downloaders_stop(pl, 0);
     // we must ensure that the downloaders are present
     if (!pl->song_downloaders[0]) {
-        int i, len = sizeof(pl->song_downloaders);
+        int i, len = sizeof(pl->song_downloaders) / sizeof(downloader_t *);
         // initialize and lock the downloaders; doing this in the main thread to guarantee no race condition
+        printf("Getting idle song downloaders\n");
         stack_get_idle_downloaders(pl->stack, pl->song_downloaders, len, dFile);
         for (i=0; i<len; i++) {
+            printf("Locking song downloader %p\n", pl->song_downloaders[i]);
             stack_downloader_lock(pl->stack, pl->song_downloaders[i]);
+            printf("Intializing the song downloader %p\n", pl->song_downloaders[i]);
+            song_downloader_init(pl, pl->song_downloaders[i], 0); 
+            // no need to call stack downloader init since when they are added first time that will be automatically called
         }
     }
     if (!pl->tid_download) {
-        pl->tid_download = pthread_create(&pl->tid_download, NULL, download_thread, pl);
+        printf("Creating the download thread\n");
+        // need to synchronize
+        // do not proceed to play the music unless you are sure that the first song has been assigned a downloader
+        pthread_create(&pl->tid_download, NULL, download_thread, pl);
     }
 }
 
@@ -589,22 +685,29 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, int parse_result
 {
     switch (pl->mode) {
         case plLocal: {
+            fm_playlist_clear(pl);
             return fm_playlist_local_dump_parse_report(pl);
         }
         case plDouban: {
             // we should first request the downloader; obtain the curl handle and then 
             downloader_t *dl = stack_get_idle_downloader(pl->stack, parse_result ? dMem : dDrop);
+            printf("Obtained downloader %p\n", dl);
             fm_playlist_curl_douban_config(pl, dl->curl, act);
+            printf("Trying to perform the curl transfer\n");
             stack_perform_until_done(pl->stack, dl);
+            printf("Transfer finished with output %s\n", dl->content.mbuf->data);
             if (!parse_result)
                 return 0;
+            // before clearing the songs we must stop the downloader to prevent it from having file handle on the current object
+            // so that it does not lead to a trailing file handler on the file
+            pl->fm_player_stop();
+            // the clear would execute the lock command necessary to lock out the downloaders
+            fm_playlist_clear(pl);
             if (fm_playlist_douban_parse_json(pl, json_tokener_parse(dl->content.mbuf->data)) == 0) {
-                // before restarting the song downloader we should really make sure that the player is stopped
-                // so that it does not lead to a trailing file handler on the file
-                pl->fm_player_stop();
                 restart_song_downloaders(pl);
                 return 0;
             }
+            /*printf("Unable to parse the output. Output is %s\n", dl->content.mbuf->data);*/
             break;
         }
         case plJing: {
@@ -617,8 +720,9 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, int parse_result
             curl_slist_free_all(slist);
             if (!parse_result)
                 return 0;
+            pl->fm_player_stop();
+            fm_playlist_clear(pl);
             if (fm_playlist_jing_parse_json(pl, json_tokener_parse(dl->content.mbuf->data)) == 0) {
-                pl->fm_player_stop();
                 restart_song_downloaders(pl);
                 return 0;
             }
@@ -682,14 +786,12 @@ fm_song_t* fm_playlist_skip(fm_playlist_t *pl, int force_refresh)
         switch (pl->mode) {
             case plLocal:case plJing:
                 if (force_refresh) {
-                    fm_playlist_clear(pl);
                     fm_playlist_send_report(pl, 's', 1, 1);
                 } else 
                     fm_playlist_next_on_link(pl);
                 break;
             case plDouban: 
                 fm_playlist_history_add(pl, pl->current, 's');
-                fm_playlist_clear(pl);
                 fm_playlist_send_report(pl, 's', 1, 1);
                 break;
         }
@@ -711,7 +813,6 @@ fm_song_t* fm_playlist_ban(fm_playlist_t *pl)
                 break;
             case plDouban: 
                 fm_playlist_history_add(pl, pl->current, 'b');
-                fm_playlist_clear(pl);
                 fm_playlist_send_report(pl, 'b', 1, 1);
                 break;
             case plJing:

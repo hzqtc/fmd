@@ -22,6 +22,8 @@ typedef struct fm_song {
     char url[128];
     char audio[128];
     char kbps[8];
+    // the extension for the song // used during caching process
+    char ext[4];
     int sid;
     int like;
     struct fm_song *next;
@@ -93,6 +95,7 @@ typedef struct {
 void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config, void (*fm_player_stop)());
 void fm_playlist_cleanup(fm_playlist_t *pl);
 
+void fm_playlist_update_mode(fm_playlist_t *pl);
 fm_song_t* fm_playlist_current(fm_playlist_t *pl);
 fm_song_t* fm_playlist_next(fm_playlist_t *pl);
 fm_song_t* fm_playlist_skip(fm_playlist_t *pl, int force_refresh);

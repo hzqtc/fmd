@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <string.h>
 #include <libgen.h>
+#include <unistd.h>
 
 static void* play_thread(void *data)
 {
@@ -41,8 +42,11 @@ static void* play_thread(void *data)
         }
 
         // decode the frame
-        if ((ret = av_read_frame(pl->format_context, &pl->avpkt)) < 0)
-            break;
+        if ((ret = av_read_frame(pl->format_context, &pl->avpkt)) < 0) {
+            // couldn't decode the frame
+            printf("Could not decode the frame\n");
+            continue;
+        }
         if (pl->avpkt.stream_index == pl->audio_stream_idx) {
             avcodec_get_frame_defaults(pl->frame);
             ret = avcodec_decode_audio4(pl->context, pl->frame, &got_frame, &pl->avpkt);
@@ -169,23 +173,17 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
 
     pl->status = FM_PLAYER_STOP;
 
-    // intialize the ffmpeg avio context etc.
-    pl->format_context = avformat_alloc_context();
-    if (!pl->format_context) {
-        fprintf(stderr, "Failed allocating format context\n");
-        exit(-1);
-    }
-
+    pl->context = NULL;
+    pl->format_context = NULL;
     // create the avio layer
-    pl->iobuf = av_malloc(IOBUF_SIZE);
-    printf("Attempting to initiate the read/write functions\n");
-    pl->io_context = avio_alloc_context(pl->iobuf, IOBUF_SIZE, 0, pl, ffmpeg_stream_read, NULL, ffmpeg_stream_seek);
-    if (!pl->io_context) {
-        fprintf(stderr, "Failed allocating avio context\n");
-        exit(-1);
-    }
-    pl->io_context->direct = 1;
-    pl->format_context->pb = pl->io_context;
+    /*pl->iobuf = av_malloc(IOBUF_SIZE);*/
+    /*printf("Attempting to initiate the read/write functions\n");*/
+    /*pl->io_context = avio_alloc_context(pl->iobuf, IOBUF_SIZE, 0, pl, ffmpeg_stream_read, NULL, ffmpeg_stream_seek);*/
+    /*if (!pl->io_context) {*/
+        /*fprintf(stderr, "Failed allocating avio context\n");*/
+        /*exit(-1);*/
+    /*}*/
+    /*pl->io_context->direct = 1;*/
 
     // intialize the av frame
     pl->frame = av_frame_alloc();
@@ -203,10 +201,8 @@ void fm_player_close(fm_player_t *pl)
     pthread_cond_destroy(&pl->cond_play);
 
     // free the ffmpeg stuff
-    avcodec_close(pl->context);
-    avformat_close_input(&pl->format_context);
-    av_free(pl->io_context);
-    av_free(pl->iobuf);
+    /*av_free(pl->io_context);*/
+    /*av_free(pl->iobuf);*/
     av_frame_free(&pl->frame);
     av_free_packet(&pl->avpkt);
     if (pl->interweave_buf)
@@ -279,41 +275,69 @@ int fm_player_set_song(fm_player_t *pl, fm_song_t *song)
     pl->info.duration = 0;
     pl->info.length = song->length;
 
+    printf("Blocking on waiting for downloader being assigned\n");
+    while (song->filepath[0] == '\0'); 
+    printf("filepath is %s\n", song->filepath);
     // open the file
-    pl->file = fopen(song->filepath, "r");
-    if (!pl->file) {
-        fprintf(stderr, "Failed opening the audio file\n");
-        return -1;
-    }                     
+    /*pl->file = fopen(song->filepath, "r");*/
+    /*if (!pl->file) {*/
+        /*fprintf(stderr, "Failed opening the audio file %s\n", song->filepath);*/
+        /*return -1;*/
+    /*}                     */
+
+    pl->format_context = NULL;
+    /*// intialize the ffmpeg avio context etc.*/
+    /*pl->format_context = avformat_alloc_context();*/
+    /*if (!pl->format_context) {*/
+        /*fprintf(stderr, "Failed allocating format context\n");*/
+        /*exit(-1);*/
+    /*}*/
+    /*pl->format_context->pb = pl->io_context;*/
+
+    // wait for the file to grow at least to a considerable size
+    printf("Blocking on waiting for the file to have some initial size\n");
+    struct stat st;
+    do {
+        stat(song->filepath, &st);
+        sleep(3);
+    } while (st.st_size < HEADERBUF_SIZE);
 
     int ret;
-    printf("Attempting to allocate the header buffer\n");
-    // read the data into the headerbuf once
-    ret = fread(pl->headerbuf, 1, sizeof(pl->headerbuf), pl->file);
-    printf("%d byte(s) of header read.\n", ret);
-    AVProbeData avpd;
-    avpd.buf = pl->headerbuf;
-    avpd.buf_size = sizeof(pl->headerbuf) - 16;
-    avpd.filename = "";
-    printf("Attempting to probe the input\n");
-    pl->input_format = av_probe_input_format(&avpd, 1);
-    if (!pl->input_format) {
-        fprintf(stderr, "Failed to initiate input format\n");
-        return -1;
-    }
+    /*int length = 0, size = sizeof(pl->headerbuf);*/
+    /*printf("Attempting to read the header\n");*/
+    /*// read the data into the headerbuf once*/
+    /*while (length < size) {*/
+        /*ret = fread(pl->headerbuf + length, 1, size - length, pl->file);*/
+        /*if (!ferror(pl->file) && ret > 0) {*/
+            /*printf("%d byte(s) of header read.\n", ret);*/
+            /*length += ret;*/
+        /*}*/
+    /*} */
+    /*AVProbeData avpd;*/
+    /*avpd.buf = pl->headerbuf;*/
+    /*avpd.buf_size = sizeof(pl->headerbuf) - 16;*/
+    /*avpd.filename = "";*/
+    /*printf("Attempting to probe the input\n");*/
+    /*pl->input_format = av_probe_input_format(&avpd, 1);*/
+    /*if (!pl->input_format) {*/
+        /*fprintf(stderr, "Failed to initiate input format\n");*/
+        /*return -1;*/
+    /*}*/
 
     printf("Attempting to open the input\n");
-    // seek to the beginning of the file to avoid problem
-    AVDictionary *options = NULL;
+    /*AVDictionary *options = NULL;*/
     /*format_context->probesize = sz;*/
-    if (avformat_open_input(&pl->format_context, "", pl->input_format, &options) < 0) {
+    if (avformat_open_input(&pl->format_context, song->filepath, NULL, NULL) < 0) {
+    /*if (avformat_open_input(&pl->format_context, "", pl->input_format, &options) < 0) {*/
         printf("Failure on opening the input stream\n");
         return -1;
     } else 
         printf("Opened format input\n");
 
+    // seek to the beginning of the file to avoid problem
+    /*fseek(pl->file, 0, SEEK_SET);*/
     printf("Attempting to find the stream info\n");
-    ret = avformat_find_stream_info(pl->format_context, &options);
+    ret = avformat_find_stream_info(pl->format_context, NULL);
     if (ret < 0) {
         fprintf(stderr, "Cannot find stream info\n");
         return -1;
@@ -412,8 +436,8 @@ void fm_player_pause(fm_player_t *pl)
 
 void fm_player_stop(fm_player_t *pl)
 {
-    printf("Player stop\n");
     if (pl->status != FM_PLAYER_STOP) {
+        printf("Player stop\n");
         pthread_mutex_lock(&pl->mutex_status);
         pl->status = FM_PLAYER_STOP;
         pthread_mutex_unlock(&pl->mutex_status);
@@ -422,10 +446,14 @@ void fm_player_stop(fm_player_t *pl)
         pthread_join(pl->tid_play, NULL);
 
         // close the file
-        if (pl->file) {
-            fclose(pl->file);
-            pl->file = NULL;
-        }
+        /*if (pl->file) {*/
+            /*fclose(pl->file);*/
+            /*pl->file = NULL;*/
+        /*}*/
+        if (pl->context)
+            avcodec_close(pl->context);
+        if (pl->format_context)
+            avformat_close_input(&pl->format_context);
     }
 }
 

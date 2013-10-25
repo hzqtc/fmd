@@ -17,20 +17,22 @@ downloader_t *downloader_init()
     dl->btype = bNone;
     dl->mode = dNone;
     dl->idle = 1;
-    dl->stop = 0;
     dl->locked = 0;
     dl->data = NULL;
     dl->content.mbuf = NULL;
     // set the handle's private field to point to the downloader itself so that later it can be easily retrieved
     curl_easy_setopt(dl->curl, CURLOPT_PRIVATE, dl);
     curl_easy_setopt(dl->curl, CURLOPT_WRITEDATA, dl);
+    curl_easy_setopt(dl->curl, CURLOPT_VERBOSE, dl);
     return dl;
 }
 
 static void fdownloader_close(downloader_t *dl)
 {
-    fclose(dl->content.fbuf->file);
-    dl->content.fbuf->file = NULL;
+    if (dl->content.fbuf->file) {
+        fclose(dl->content.fbuf->file);
+        dl->content.fbuf->file = NULL;
+    }
 }
 
 // free the respective fields given that the downloader would be used for mode m
@@ -39,12 +41,12 @@ void downloader_free_buf(downloader_t *dl)
 {
     switch (dl->btype) {
         case bMem:
+            printf("Freeing the mbuf for downloader %p\n", dl);
             free(dl->content.mbuf);
             break;
         case bFile:
             // remove this part of the memory
-            if (dl->content.fbuf->file)
-                fdownloader_close(dl);
+            fdownloader_close(dl);
             free(dl->content.fbuf);
             break;
         default:
@@ -57,11 +59,7 @@ void downloader_free_buf(downloader_t *dl)
 static size_t append_to_buffer(char *ptr, size_t size, size_t nmemb, void *userp)
 {
     downloader_t *dl = (downloader_t *) userp;
-    if (dl->stop) {
-        return 0;
-    }
-    dl->idle = 0;
-    printf("Entered buffer appending block\n");
+    /*printf("Entered buffer appending block\n");*/
     mbuffer_t *buffer = dl->content.mbuf;
     size_t bytes = size * nmemb;
     if (buffer->length + bytes <= sizeof(buffer->data)) {
@@ -75,11 +73,7 @@ static size_t append_to_buffer(char *ptr, size_t size, size_t nmemb, void *userp
 
 static size_t drop_buffer(char *ptr, size_t size, size_t nmemb, void *userp)
 {
-    downloader_t *dl = (downloader_t *) userp;
-    if (dl->stop) {
-        return 0;
-    }
-    dl->idle = 0;
+    /*downloader_t *dl = (downloader_t *) userp;*/
     return size * nmemb;
 }
 
@@ -114,13 +108,7 @@ void mdownloader_config(downloader_t *dl)
 static size_t append_to_file(char *ptr, size_t size, size_t nmemb, void *userp)
 {
     downloader_t *dl = (downloader_t *) userp;
-    if (dl->stop) {
-        // close the file
-        fdownloader_close(dl);
-        return 0;
-    }
-    dl->idle = 0;
-    printf("Entered file appending block\n");
+    /*printf("Entered file appending block\n");*/
     fbuffer_t *buffer = dl->content.fbuf;
     size_t s = fwrite(ptr, size, nmemb, buffer->file);
     return s * size;
@@ -132,9 +120,8 @@ void fdownloader_config(downloader_t *dl)
         downloader_free_buf(dl);
         dl->btype = bFile;
         dl->content.fbuf = (fbuffer_t *) malloc(sizeof(fbuffer_t));
-    } else if (dl->content.fbuf->file) {
-        fdownloader_close(dl);
-    }
+    } 
+    printf("Configuring fdownloader for %p\n", dl);
     // requesting a new tmp file to be opened
     get_tmp_filepath(dl->content.fbuf->filepath);
     dl->mode = dFile;
@@ -161,15 +148,6 @@ void downloader_config_mode(downloader_t *dl, enum downloader_mode m)
         case dDrop:
             ddownloader_config(dl); break;
         default: break;
-    }
-}
-
-void downloader_stop(downloader_t *dl)
-{
-    if (!dl->idle) {
-        printf("Downloader forced to stop\n");
-        dl->stop = 1;
-        dl->idle = 1;
     }
 }
 
@@ -213,6 +191,18 @@ downloader_stack_t *stack_init()
     return stack;
 }
 
+void stack_downloader_stop(downloader_stack_t *stack, downloader_t *d)
+{
+    printf("Downloader %p stopped and marked to idle\n", d);
+    d->idle = 1;
+    // any close action
+    if (d->btype == bFile) {
+        fdownloader_close(d);
+    }
+    // remove the handle from the multi_handle
+    curl_multi_remove_handle(stack->multi_handle, d->curl);
+}
+
 void stack_mark_idle_downloaders(downloader_stack_t *stack)
 {
     CURLMsg *msg;
@@ -220,14 +210,8 @@ void stack_mark_idle_downloaders(downloader_stack_t *stack)
     downloader_t *d;
     while ((msg = curl_multi_info_read(stack->multi_handle, &msgs_left))) {
         if (msg->msg == CURLMSG_DONE) {
-            curl_easy_getinfo(msg->easy_handle, CURLOPT_PRIVATE, &d);
-            d->idle = 1;
-            // any close action
-            if (d->btype == bFile) {
-                fdownloader_close(d);
-            }
-            // remove the handle from the multi_handle
-            curl_multi_remove_handle(stack->multi_handle, d->curl);
+            curl_easy_getinfo(msg->easy_handle, CURLINFO_PRIVATE, &d);
+            stack_downloader_stop(stack, d);
         }
     }
 }
@@ -238,15 +222,12 @@ int stack_downloader_is_idle(downloader_stack_t *stack, downloader_t *dl)
     return dl->idle;
 }
 
-void stack_downloader_stop(downloader_stack_t *stack, downloader_t *dl)
-{
-    curl_multi_remove_handle(stack->multi_handle, dl->curl);
-    dl->idle = 1;
-}
-
 void stack_downloader_init(downloader_stack_t *stack, downloader_t *dl) 
 {
+    printf("Downloader %p on mode %d inited and added to the stack\n", dl, dl->mode);
     curl_multi_add_handle(stack->multi_handle, dl->curl);
+    // set the idle attribute for the downloader
+    dl->idle = 0;
 }
 
 downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downloader_t **start, int length, void *data, downloader_t *(*condition)(downloader_stack_t *stack, downloader_t **start, int length, void *data))
@@ -254,16 +235,21 @@ downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downl
     int still_running, i;
     void *ret;
     // first add all these handles to the mix
+    printf("Adding all the handles to the multi-handle\n");
     for (i=0; i<length; i++) {
         stack_downloader_init(stack, start[i]);
     }
 
     /* we start some action by calling perform right away */
+    printf("Trying with initial perform for multi-handle %p\n", stack->multi_handle);
     while ( curl_multi_perform(stack->multi_handle, &still_running) == CURLM_CALL_MULTI_PERFORM );
+    printf("Initial perform finished\n");
 
     do {
+        /*printf("Marking the idle downloaders\n");*/
         stack_mark_idle_downloaders(stack);
 
+        /*printf("Testing the condition\n");*/
         if ((ret = condition(stack, start, length, data)))
             return ret;
 
@@ -295,8 +281,10 @@ downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downl
         }
 
         curl_multi_fdset(stack->multi_handle, &fdread, &fdwrite, &fdexcep, &maxfd);
+        /*printf("fdset finished\n");*/
 
         rc = select(maxfd+1, &fdread, &fdwrite, &fdexcep, &timeout);
+        /*printf("select finished with return code %d\n", rc);*/
 
         switch(rc) {
             case -1:
@@ -304,6 +292,7 @@ downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downl
                 break;
             case 0: /* timeout */
             default: /* action */
+                /*printf("Perform again\n");*/
                 curl_multi_perform(stack->multi_handle, &still_running);
                 break;
         }
@@ -361,7 +350,7 @@ int stack_perform_until_done(downloader_stack_t *stack, downloader_t *downloader
 void stack_get_idle_downloaders(downloader_stack_t *stack, downloader_t **start, int length, enum downloader_mode mode)
 {
     stack_mark_idle_downloaders(stack);
-    int i, n = length;
+    int i, n = 0;
     enum downloader_buffer_type preferred_btype = bNone;
     switch (mode) {
         case dMem: preferred_btype = bMem; break;
@@ -371,22 +360,23 @@ void stack_get_idle_downloaders(downloader_stack_t *stack, downloader_t **start,
     // loop through the multi_handle's message queue to get all those 'done' downloaders
     downloader_t *idlers[stack->size], *dl;
     int idlex = 0;
-    for (i=0; n > 0 && i<stack->size; i++) {
+    for (i=0; n < length && i<stack->size; i++) {
         dl = stack->downloaders[i];
         if (!dl->locked && dl->idle) {
             if (dl->mode == mode || mode == dAny || mode == dDrop || dl->btype == preferred_btype)
-                start[n--] = dl;
+                start[n++] = dl;
             else
                 idlers[idlex++] = dl;
         }
 
     }
-    for (i=0; n > 0 && i < idlex; i++) {
-        start[n--] = idlers[i];
+    for (i=0; n < length && i < idlex; i++) {
+        printf("Fallback to retrieving idle downloader %p with different modes\n", idlers[i]);
+        start[n++] = idlers[i];
     }
-    while (n > 0) {
+    while (n < length) {
         dl = downloader_init();
-        start[n--] = dl;
+        start[n++] = dl;
         stack_add_downloader(stack, dl);
     }
     // configure all the downloaders to be returned
