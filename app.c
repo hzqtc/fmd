@@ -344,7 +344,7 @@ int main() {
         },
         {
             .type = FM_CONFIG_STR,
-            .section = "Download",
+            .section = "Local",
             .key = "music_dir",
             .val.s = playlist_conf.music_dir
         },
