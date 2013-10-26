@@ -12,11 +12,6 @@
 #include <sys/stat.h>
 #include <errno.h>
 
-// Adding the new downloader interface
-// All newly retrieved songs are downloaded IMMEDIATELY
-
-#define N_LOCAL_CHANNEL_FETCH 25
-
 static char *douban_music_website = "http://music.douban.com";
 
 static void song_downloader_stop(fm_playlist_t *pl, downloader_t *dl)
@@ -36,7 +31,7 @@ void fm_playlist_update_mode(fm_playlist_t *pl)
     strtol(pl->config.channel, &address, 10);
     if (*address == '\0') {
         // this is valid number
-        if (strcmp(pl->config.channel, local_channel) == 0)
+        if (strcmp(pl->config.channel, LOCAL_CHANNEL) == 0)
             pl->mode = plLocal;
         else
             pl->mode = plDouban;
@@ -263,12 +258,12 @@ static const char* fm_playlist_history_str(fm_playlist_t *pl)
     return buffer;
 }
 
-static void fm_playlist_push_front(fm_playlist_t *pl, fm_song_t *song)
+static void fm_playlist_push_front(fm_song_t **base, fm_song_t *song)
 {
     if (song) {
-        song->next = pl->current;
-        pl->current = song;
-        printf("Playlist add song %d to the top\n", song->sid);
+        song->next = *base;
+        *base = song;
+        printf("Playlist add song %d before %p\n", song->sid, *base);
     }
 }
 
@@ -344,7 +339,7 @@ void fm_playlist_cleanup(fm_playlist_t *pl)
     pthread_cond_destroy(&pl->cond_song_download_restart);
 }
 
-static int fm_playlist_douban_parse_json(fm_playlist_t *pl, struct json_object *obj)
+static int fm_playlist_douban_parse_json(fm_playlist_t *pl, struct json_object *obj, fm_song_t **base)
 {
     if (!obj)
         return -1;
@@ -360,7 +355,7 @@ static int fm_playlist_douban_parse_json(fm_playlist_t *pl, struct json_object *
     for (i = songs->length - 1; i >= 0; i--) {
         struct json_object *o = (struct json_object*) array_list_get_idx(songs, i);
         fm_song_t *song = fm_song_douban_parse_json(pl, o);
-        fm_playlist_push_front(pl, song);
+        fm_playlist_push_front(base, song);
     }
     json_object_put(obj); 
     return 0;
@@ -418,7 +413,7 @@ static void fm_playlist_curl_jing_config(fm_playlist_t *pl, CURL *curl, char act
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, slist);
 }
 
-static int fm_playlist_jing_parse_json(fm_playlist_t *pl, struct json_object *obj)
+static int fm_playlist_jing_parse_json(fm_playlist_t *pl, struct json_object *obj, fm_song_t **base)
 {
     // here we are only going to parse the fetch_pls (conceivably)
     if ((obj = fm_jing_parse_json_result(obj)))  {
@@ -458,7 +453,7 @@ static int fm_playlist_jing_parse_json(fm_playlist_t *pl, struct json_object *ob
                     songs[i]->like = *json_object_get_string(json_object_object_get(o, "lvd")) == 'l' ? 1 : 0;
                     printf("Song title %s is liked? %d\n", songs[i]->title, songs[i]->like);
                 }
-                fm_playlist_push_front(pl, songs[i]);
+                fm_playlist_push_front(base, songs[i]);
             }
             curl_slist_free_all(slist);
         }
@@ -471,7 +466,7 @@ static int fm_playlist_jing_parse_json(fm_playlist_t *pl, struct json_object *ob
     return 0;
 }
 
-static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl)
+static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **base)
 {
     char buf[512];
     sprintf(buf,
@@ -524,7 +519,7 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl)
             printf("Obtained song field: %s for song %p\n", lastf, song);
             if (fn == fl - 1) {
                 // push the last song
-                fm_playlist_push_front(pl, song);
+                fm_playlist_push_front(base, song);
                 if (ch == EOF)
                     break; 
                 song = (fm_song_t*) malloc(sizeof(fm_song_t));
@@ -684,28 +679,30 @@ static void restart_song_downloaders(fm_playlist_t *pl)
     }
 }
 
-static int fm_playlist_send_report(fm_playlist_t *pl, char act, int parse_result, int fallback)
+// fallback: whether fallback should be used (use local station when network unavailable)
+// base: the base to append the result in front of (NULL if result should be discarded)
+static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base, int fallback)
 {
     switch (pl->mode) {
         case plLocal: {
             fm_playlist_clear(pl);
-            return fm_playlist_local_dump_parse_report(pl);
+            return fm_playlist_local_dump_parse_report(pl, base);
         }
         case plDouban: {
             // we should first request the downloader; obtain the curl handle and then 
-            downloader_t *dl = stack_get_idle_downloader(pl->stack, parse_result ? dMem : dDrop);
+            downloader_t *dl = stack_get_idle_downloader(pl->stack, base ? dMem : dDrop);
             printf("Obtained downloader %p\n", dl);
             fm_playlist_curl_douban_config(pl, dl->curl, act);
             printf("Trying to perform the curl transfer\n");
             stack_perform_until_done(pl->stack, dl);
             printf("Transfer finished with output %s\n", dl->content.mbuf->data);
-            if (!parse_result)
+            if (!base)
                 return 0;
             // before clearing the songs we must stop the downloader to prevent it from having file handle on the current object
             // so that it does not lead to a trailing file handler on the file
             // the clear would execute the lock command necessary to lock out the downloaders
             fm_playlist_clear(pl);
-            if (fm_playlist_douban_parse_json(pl, json_tokener_parse(dl->content.mbuf->data)) == 0) {
+            if (fm_playlist_douban_parse_json(pl, json_tokener_parse(dl->content.mbuf->data), base) == 0) {
                 restart_song_downloaders(pl);
                 return 0;
             }
@@ -715,15 +712,15 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, int parse_result
         case plJing: {
             struct curl_slist *slist;
             fm_playlist_curl_jing_headers_init(pl, &slist);
-            downloader_t *dl = stack_get_idle_downloader(pl->stack, parse_result ? dMem : dDrop);
+            downloader_t *dl = stack_get_idle_downloader(pl->stack, base ? dMem : dDrop);
             // the jing config shouldn't involve any data for the playlist. Otherwise there's some error
             fm_playlist_curl_jing_config(pl, dl->curl, act, slist, NULL);
             stack_perform_until_done(pl->stack, dl);
             curl_slist_free_all(slist);
-            if (!parse_result)
+            if (!base)
                 return 0;
             fm_playlist_clear(pl);
-            if (fm_playlist_jing_parse_json(pl, json_tokener_parse(dl->content.mbuf->data)) == 0) {
+            if (fm_playlist_jing_parse_json(pl, json_tokener_parse(dl->content.mbuf->data), base) == 0) {
                 restart_song_downloaders(pl);
                 return 0;
             }
@@ -733,9 +730,9 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, int parse_result
     fprintf(stderr, "Some error occurred during the process; Maybe network is down. \n");
     if (fallback) {
         fprintf(stderr, "Trying again with local channel.\n");
-        strcpy(pl->config.channel, local_channel);
+        strcpy(pl->config.channel, LOCAL_CHANNEL);
         pl->mode = plLocal;
-        return fm_playlist_send_report(pl, act, parse_result, 0);
+        return fm_playlist_send_report(pl, act, base, 0);
     }
     return -1;
 }
@@ -748,13 +745,25 @@ fm_song_t* fm_playlist_current(fm_playlist_t *pl)
         return pl->current;
 }
 
+static fm_song_t **playlist_end_in_number(fm_song_t **start, int n)
+{
+    while (n>0) {
+        if (!*start)
+            return start;
+        start = &(*start)->next;
+        n--;
+    }
+    return NULL;
+}
+
 static void fm_playlist_next_on_link(fm_playlist_t *pl)
 {
     fm_song_free(pl, fm_playlist_pop_front(pl));
-    // TODO: probably starts caching when there are a few songs left?
-    if (!pl->current) {
-        printf("Playlist empty, request more\n");
-        fm_playlist_send_report(pl, 'p', 1, 1);
+    // starts caching when there are two songs left
+    fm_song_t **ef = playlist_end_in_number(&pl->current, PLAYLIST_REFILL_THRESHOLD);
+    if (ef) {
+        printf("Playlist going to terminate in %d hops, request more\n", PLAYLIST_REFILL_THRESHOLD);
+        fm_playlist_send_report(pl, 'p', ef, 1);
     }
 }
 
@@ -767,14 +776,14 @@ fm_song_t* fm_playlist_next(fm_playlist_t *pl)
                 break;
             case plDouban: 
                 fm_playlist_history_add(pl, pl->current, 'e');
-                fm_playlist_send_report(pl, 'e', 0, 1);
+                fm_playlist_send_report(pl, 'e', NULL, 1);
                 break;
         }
         fm_playlist_next_on_link(pl);
     }
     else {
         printf("Playlist init empty, request new\n");
-        fm_playlist_send_report(pl, 'n', 1, 1);
+        fm_playlist_send_report(pl, 'n', &pl->current, 1);
     }
     return pl->current;
 }
@@ -787,13 +796,13 @@ fm_song_t* fm_playlist_skip(fm_playlist_t *pl, int force_refresh)
         switch (pl->mode) {
             case plLocal:case plJing:
                 if (force_refresh) {
-                    fm_playlist_send_report(pl, 's', 1, 1);
+                    fm_playlist_send_report(pl, 's', &pl->current, 1);
                 } else 
                     fm_playlist_next_on_link(pl);
                 break;
             case plDouban: 
                 fm_playlist_history_add(pl, pl->current, 's');
-                fm_playlist_send_report(pl, 's', 1, 1);
+                fm_playlist_send_report(pl, 's', &pl->current, 1);
                 break;
         }
         return pl->current;
@@ -814,10 +823,10 @@ fm_song_t* fm_playlist_ban(fm_playlist_t *pl)
                 break;
             case plDouban: 
                 fm_playlist_history_add(pl, pl->current, 'b');
-                fm_playlist_send_report(pl, 'b', 1, 1);
+                fm_playlist_send_report(pl, 'b', &pl->current, 1);
                 break;
             case plJing:
-                fm_playlist_send_report(pl, 'b', 0, 1);
+                fm_playlist_send_report(pl, 'b', NULL, 1);
                 fm_playlist_next_on_link(pl);
                 break;
         }
@@ -836,7 +845,7 @@ void fm_playlist_rate(fm_playlist_t *pl)
             case plLocal:
                 break;
             case plDouban: case plJing:
-                fm_playlist_send_report(pl, 'r', 0, 0);
+                fm_playlist_send_report(pl, 'r', NULL, 0);
                 break;
         }
     }
@@ -854,7 +863,7 @@ void fm_playlist_unrate(fm_playlist_t *pl)
                 fm_playlist_next_on_link(pl);
                 break;
             case plDouban: case plJing:
-                fm_playlist_send_report(pl, 'u', 0, 0);
+                fm_playlist_send_report(pl, 'u', NULL, 0);
                 break;
         }
     }
