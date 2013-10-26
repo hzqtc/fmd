@@ -90,7 +90,7 @@ def parsemp4(f):
         kbps, len = getinfo(file)
         return (artist, album, title, year, kbps, len)
     except:
-        return ('','','',0,0)
+        return ('','','','',0,0)
 
 for f in args.audiofile:
     path = unicode(os.path.realpath(f.decode('utf-8')))
@@ -133,8 +133,8 @@ for f in args.audiofile:
         kbps, len = getinfo(file)
     except HeaderNotFoundError:
         artist, album, title, year, kbps, len = parsemp4(f)
-    #except:
-        #pass
+    except:
+        pass
 
     reps = {u'artist':artist,
             u'title':title,

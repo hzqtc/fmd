@@ -87,11 +87,12 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
             char cmd[2048], btp[128], bart[128], btitle[128], balb[128], blp[128], bcover[128], burl[128]; 
             sprintf(cmd, 
                     "src=$'%s';"
-                    "[ \"$(mutagen -f '{len}' \"$src\")\" != '%d' ] && exit 0;"
+                    "l=\"$(mutagen -f '{len}' \"$src\")\";"
+                    "ld=$((l - %d));"
+                    "(((ld < -2)) || ((ld > 2))) && rm -f \"$src\" && exit 0;"
                     "artist=$'%s'; title=$'%s'; album=$'%s'; date='%d';"
                     "[[ \"$date\" =~ [0-9]{4} ]] && datearg=\"-Y $date\" || datearg=;"
                     "dest=$'%s';"
-                    "[ -f \"$dest\" ] && exit 0;"
                     "mkdir -p \"$(dirname \"$dest\")\";"
                     "mv -f \"$src\" \"$dest\";" 
                     "tmpimg='/tmp/fmdcover.jpg'; cover=$'%s';"
