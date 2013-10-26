@@ -1,6 +1,7 @@
 #include "downloader.h"
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 static int tmp_count = 0;
 
@@ -24,6 +25,8 @@ downloader_t *downloader_init()
     curl_easy_setopt(dl->curl, CURLOPT_PRIVATE, dl);
     curl_easy_setopt(dl->curl, CURLOPT_WRITEDATA, dl);
     curl_easy_setopt(dl->curl, CURLOPT_VERBOSE, dl);
+    // initialize the conditional variable
+    pthread_cond_init(&dl->cond_new_content, NULL);
     return dl;
 }
 
@@ -64,6 +67,7 @@ static size_t append_to_buffer(char *ptr, size_t size, size_t nmemb, void *userp
     size_t bytes = size * nmemb;
     if (buffer->length + bytes <= sizeof(buffer->data)) {
         memcpy(buffer->data + buffer->length, ptr, bytes);
+        pthread_cond_signal(&dl->cond_new_content);
         buffer->length += bytes;
     } else {
         fprintf(stderr, "Unable to append more data. Buffer is full.");
@@ -73,7 +77,8 @@ static size_t append_to_buffer(char *ptr, size_t size, size_t nmemb, void *userp
 
 static size_t drop_buffer(char *ptr, size_t size, size_t nmemb, void *userp)
 {
-    /*downloader_t *dl = (downloader_t *) userp;*/
+    downloader_t *dl = (downloader_t *) userp;
+    pthread_cond_signal(&dl->cond_new_content);
     return size * nmemb;
 }
 
@@ -86,6 +91,8 @@ void downloader_free(downloader_t *dl)
 {
     downloader_free_buf(dl);
     downloader_free_curl(dl);
+    // free the condition variable
+    pthread_cond_destroy(&dl->cond_new_content);
     free(dl);
 }
 
@@ -111,6 +118,8 @@ static size_t append_to_file(char *ptr, size_t size, size_t nmemb, void *userp)
     /*printf("Entered file appending block\n");*/
     fbuffer_t *buffer = dl->content.fbuf;
     size_t s = fwrite(ptr, size, nmemb, buffer->file);
+    if (s > 0)
+        pthread_cond_signal(&dl->cond_new_content);
     return s * size;
 }
 
@@ -358,12 +367,13 @@ void stack_get_idle_downloaders(downloader_stack_t *stack, downloader_t **start,
         default: break;
     }
     // loop through the multi_handle's message queue to get all those 'done' downloaders
+    printf("Total number of downloaders in the stack is %d; number of requested downloaders is %d\n", stack->size, length);
     downloader_t *idlers[stack->size], *dl;
     int idlex = 0;
     for (i=0; n < length && i<stack->size; i++) {
         dl = stack->downloaders[i];
         if (!dl->locked && dl->idle) {
-            if (dl->mode == mode || mode == dAny || mode == dDrop || dl->btype == preferred_btype)
+            if (dl->mode == mode || dl->mode == dNone || mode == dAny || mode == dDrop || dl->btype == preferred_btype)
                 start[n++] = dl;
             else
                 idlers[idlex++] = dl;

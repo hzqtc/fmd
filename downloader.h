@@ -35,6 +35,8 @@ typedef struct {
     void *data;
     // the easy curl handle responsible for the actual downloading
     CURL *curl;
+    // the condition that clients can use to monitor if new content arrived
+    pthread_cond_t cond_new_content;
     // content specifies the type of the buffer used
     union {
         mbuffer_t *mbuf;

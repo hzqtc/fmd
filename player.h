@@ -49,14 +49,14 @@ typedef struct {
 typedef struct fm_player {
     ao_device *dev;
 
+    // the current playing song; note that it can become a dangling pointer if the playlist frees that song
+    // so make sure that the player is stopped first
+    fm_song_t *song;
+
     // the more complicated avcodec data
     AVCodec *codec;
     AVCodecContext *context;
     AVPacket avpkt;
-    //AVInputFormat *input_format;
-    //AVIOContext *io_context;
-    //unsigned char *iobuf;
-    //unsigned char headerbuf[HEADERBUF_SIZE];
     AVFormatContext *format_context;
     int audio_stream_idx;
     // decoding
@@ -72,8 +72,6 @@ typedef struct fm_player {
     uint8_t **swr_buf;
     int dest_swr_nb_samples;
 
-    FILE *file;
-
     fm_player_info_t info;
     fm_player_config_t config;
     enum fm_player_status status;
@@ -82,8 +80,8 @@ typedef struct fm_player {
     int sig_ack;
 
     pthread_t tid_play;
-    pthread_mutex_t mutex_status;
     pthread_cond_t cond_play;
+    pthread_mutex_t mutex_status;
 } fm_player_t;
 
 int fm_player_set_song(fm_player_t *pl, fm_song_t *song);

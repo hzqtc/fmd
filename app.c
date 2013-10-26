@@ -1,6 +1,6 @@
 #include "server.h"
-#include "player.h"
 #include "playlist.h"
+#include "player.h"
 #include "config.h"
 #include "util.h"
 
@@ -160,7 +160,17 @@ void app_client_handler(void *ptr, char *input, char *output)
             case FM_PLAYER_PAUSE: {
                 char sh[256];
                 char url[128];
-                sprintf(sh, "$BROWSER $'%s' &", escapesh(url, fm_playlist_current(&app->playlist)->url));
+                fm_song_t *current = fm_playlist_current(&app->playlist);
+                if (escapesh(url, current->url)[0] == '\0') {
+                    // we need to make a custom url to open
+                    sprintf(url, "%s %s", current->artist, current->title);
+                    // first obtain a curl instance to escape the query
+                    downloader_t *d = stack_get_idle_downloader(app->playlist.stack, dAny);
+                    char *arg = curl_easy_escape(d->curl, url, 0);
+                    sprintf(url, "http://music.douban.com/subject_search?search_text=%s&cat=1003", arg);
+                    curl_free(arg);
+                }
+                sprintf(sh, "$BROWSER $'%s' &", url);
                 system(sh);
                 break;
             }
