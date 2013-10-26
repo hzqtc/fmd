@@ -576,6 +576,8 @@ static void fm_playlist_curl_douban_config(fm_playlist_t *pl, CURL *curl, char a
 static int song_downloader_init(fm_playlist_t *pl, downloader_t *dl, int recycle) {
     if (!pl->current_download) {
         /*printf("Current download is NULL. Skipping\n");*/
+        if (recycle) 
+            song_downloader_stop(pl, dl);
         return -1;
     }
     if (recycle) {
@@ -612,32 +614,25 @@ static downloader_t *process_download(downloader_stack_t *stack, downloader_t **
     }
     pthread_mutex_unlock(&pl->mutex_song_download_stop);
     // perform any download if we can
+    int all_finished = 1;
     for (i=0; i<length; i++) {
         /*printf("Looping through the downloaders\n");*/
         if (start[i]->idle) {
             /*printf("Obtained idle song downloader %p\n", start[i]);*/
             // reinitialize the downloaders and configure them
-            if (song_downloader_init(pl, start[i], 1) != 0) {
-                // no more download
-                int all_idle = 1;
-                for (i=0; i<length; i++) {
-                    // check that all are idle now
-                    if (!start[i]->idle) {
-                        /*printf("Downloader %p is still not idle\n", start[i]);*/
-                        all_idle = 0;
-                        break;
-                    }
-                }
-                if (all_idle) {
-                    // simply return
-                    printf("All downloads finished\n");
-                    return start[0];
-                }
-            } else {
+            if (song_downloader_init(pl, start[i], 1) == 0) {
+                all_finished = 0;
                 // readd the downloaders to the stack
                 stack_downloader_init(stack, start[i]);
             }
+        } else {
+            all_finished = 0;
         }
+    }
+    if (all_finished) {
+        // simply return
+        printf("All downloads finished\n");
+        return start[0];
     }
     return NULL;
 }
