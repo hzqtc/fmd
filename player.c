@@ -437,6 +437,7 @@ void fm_player_stop(fm_player_t *pl)
         pl->status = FM_PLAYER_STOP;
         pthread_mutex_unlock(&pl->mutex_status);
         pthread_cond_signal(&pl->cond_play);
+        printf("Trying to signal cond new content\n");
         if (pl->song->downloader)
             pthread_cond_signal(&pl->song->downloader->cond_new_content);
 

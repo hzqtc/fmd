@@ -92,6 +92,7 @@ typedef struct {
     pthread_t tid_download;
     fm_song_t *current_download;
     pthread_mutex_t mutex_song_download_stop;
+    pthread_mutex_t mutex_current_download;
     pthread_cond_t cond_song_download_restart;
 } fm_playlist_t;
 

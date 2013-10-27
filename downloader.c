@@ -202,14 +202,16 @@ downloader_stack_t *stack_init()
 
 void stack_downloader_stop(downloader_stack_t *stack, downloader_t *d)
 {
-    printf("Downloader %p stopped and marked to idle\n", d);
-    d->idle = 1;
-    // any close action
-    if (d->btype == bFile) {
-        fdownloader_close(d);
+    if (!d->idle) {
+        printf("Downloader %p stopped and marked to idle\n", d);
+        d->idle = 1;
+        // any close action
+        if (d->btype == bFile) {
+            fdownloader_close(d);
+        }
+        // remove the handle from the multi_handle
+        curl_multi_remove_handle(stack->multi_handle, d->curl);
     }
-    // remove the handle from the multi_handle
-    curl_multi_remove_handle(stack->multi_handle, d->curl);
 }
 
 void stack_mark_idle_downloaders(downloader_stack_t *stack)
