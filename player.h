@@ -14,7 +14,7 @@
 #include <libswresample/swresample.h>
 
 #define IOBUF_SIZE 20480
-#define HEADERBUF_SIZE 16384
+#define HEADERBUF_SIZE 32768
 #define AUDIO_REFILL_THRESH 4096
 
 enum fm_player_status {
