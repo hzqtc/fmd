@@ -348,18 +348,18 @@ static int fm_playlist_douban_parse_json(fm_playlist_t *pl, struct json_object *
     int ret = json_object_get_int(json_object_object_get(obj, "r"));
     if (ret != 0) {
         fprintf(stderr, "API error: %s\n", json_object_get_string(json_object_object_get(obj, "err")));
-        return -1;
-    }
-    printf("Douban playlist parsing new API response\n");
-    array_list *songs = json_object_get_array(json_object_object_get(obj, "song"));
-    printf("parsed song\n");
-    for (i = songs->length - 1; i >= 0; i--) {
-        struct json_object *o = (struct json_object*) array_list_get_idx(songs, i);
-        fm_song_t *song = fm_song_douban_parse_json(pl, o);
-        fm_playlist_push_front(base, song);
+    } else {
+        printf("Douban playlist parsing new API response\n");
+        array_list *songs = json_object_get_array(json_object_object_get(obj, "song"));
+        printf("parsed song\n");
+        for (i = songs->length - 1; i >= 0; i--) {
+            struct json_object *o = (struct json_object*) array_list_get_idx(songs, i);
+            fm_song_t *song = fm_song_douban_parse_json(pl, o);
+            fm_playlist_push_front(base, song);
+        }
     }
     json_object_put(obj); 
-    return 0;
+    return ret;
 }
 
 static void fm_playlist_curl_jing_headers_init(fm_playlist_t *pl, struct curl_slist **slist)
@@ -417,12 +417,14 @@ static void fm_playlist_curl_jing_config(fm_playlist_t *pl, CURL *curl, char act
 static int fm_playlist_jing_parse_json(fm_playlist_t *pl, struct json_object *obj, fm_song_t **base)
 {
     // here we are only going to parse the fetch_pls (conceivably)
+    int ret = 0;
     if ((obj = fm_jing_parse_json_result(obj)))  {
         printf("Jing playlist parsing new API response\n");
         array_list *song_objs = json_object_get_array(json_object_object_get(obj, "items"));
         printf("parsed song\n");
         // we should make use of a multihandle that accelerates the pulling process
         int len = song_objs->length;
+        printf("Number of songs returned is %d\n", len);
         if (len > 0) {
             int i;
             fm_song_t *songs[len];
@@ -457,14 +459,17 @@ static int fm_playlist_jing_parse_json(fm_playlist_t *pl, struct json_object *ob
                 fm_playlist_push_front(base, songs[i]);
             }
             curl_slist_free_all(slist);
+        } else {
+            printf("Jing song parser: no song available for the given channel\n");
+            ret = -1;
         }
     } else {
-        printf("Jing song parser: failed to retrieve the like information about the song\n");
-        return -1;
+        printf("Jing song parser: no result returned from Jing.fm\n");
+        ret = -1;
     }
 
     json_object_put(obj); 
-    return 0;
+    return ret;
 }
 
 static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **base)
