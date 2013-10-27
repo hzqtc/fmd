@@ -86,6 +86,7 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
                     char cmd[2048], btp[128], bart[128], btitle[128], balb[128], blp[128], bcover[128], burl[128]; 
                     sprintf(cmd, 
                             "src=$'%s'; dest=\"$src.%s\";"
+                            "tmpimg=\"$src.jpg\";"
                             "mv \"$src\" \"$dest\";"
                             "src=\"$dest\";"
                             "l=\"$(mutagen -f '{len}' \"$src\")\";"
@@ -96,7 +97,7 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
                             "dest=$'%s';"
                             "mkdir -p \"$(dirname \"$dest\")\";"
                             "mv -f \"$src\" \"$dest\";" 
-                            "tmpimg='/tmp/fmdcover.jpg'; cover=$'%s';"
+                            "cover=$'%s';"
                             "(curl --connect-timeout 15 -m 60 -o \"$tmpimg\" \"$cover\";"
                             "([ -f \"$tmpimg\" ] && identify \"$tmpimg\") && coverarg=\"-c $tmpimg\" || coverarg=;"
                             "page_url=$'%s';"
@@ -742,27 +743,29 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base
     // changing the song structure
     pthread_mutex_lock(&pl->mutex_current_download);
     if (clear_old) {
+        printf("Clearing old songs\n");
         fm_playlist_clear(pl);
     }
+    printf("Attempting to parse the output\n");
     int ret = parse_fun(pl, json_tokener_parse(dl->content.mbuf->data), base);
+    if (ret == 0 && reset_current) {
+        pl->current_download = &pl->current;
+        printf("Resetting current download to %s / %s with url %s\n", (*pl->current_download)->artist, (*pl->current_download)->title, (*pl->current_download)->audio);
+    }
+    pthread_mutex_unlock(&pl->mutex_current_download);
+
     if (ret == 0) {
         if (reset_current) {
-            // reset the download flag
-            pl->current_download = &pl->current;
-            printf("Resetting current download to %s / %s with url %s\n", (*pl->current_download)->artist, (*pl->current_download)->title, (*pl->current_download)->audio);
             // signal the condition
             pthread_cond_signal(&pl->cond_song_download_restart);
             // we should reset the stop flag to 0; because at this stage the download thread should definitely go on
             pthread_mutex_lock(&pl->mutex_song_download_stop);
             pl->song_download_stop = 0;
             pthread_mutex_unlock(&pl->mutex_song_download_stop);
-        } 
-        pthread_mutex_unlock(&pl->mutex_current_download);
+        }  
+        printf("Starting song downloaders\n");
         start_song_downloaders(pl);
-    } else 
-        pthread_mutex_unlock(&pl->mutex_current_download);
-
-    if (ret != 0) {
+    } else {
         fprintf(stderr, "Some error occurred during the process; Maybe network is down. \n");
         if (fallback) {
             fprintf(stderr, "Trying again with local channel.\n");
