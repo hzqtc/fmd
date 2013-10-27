@@ -90,7 +90,7 @@ typedef struct {
     // a flag telling the song download thread to stop download
     int song_download_stop;
     pthread_t tid_download;
-    fm_song_t *current_download;
+    fm_song_t **current_download;
     pthread_mutex_t mutex_song_download_stop;
     pthread_mutex_t mutex_current_download;
     pthread_cond_t cond_song_download_restart;

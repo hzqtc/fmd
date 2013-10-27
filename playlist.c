@@ -323,6 +323,7 @@ void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config, void (*fm
     pl->song_download_stop = 0;
     pl->song_downloaders[0] = NULL;
     pl->tid_download = 0;
+    pl->current_download = &pl->current;
     pthread_mutex_init(&pl->mutex_song_download_stop, NULL);
     pthread_mutex_init(&pl->mutex_current_download, NULL);
     pthread_cond_init(&pl->cond_song_download_restart, NULL);
@@ -577,22 +578,22 @@ static void fm_playlist_curl_douban_config(fm_playlist_t *pl, CURL *curl, char a
 static int song_downloader_init(fm_playlist_t *pl, downloader_t *dl, int recycle) {
     int ret;
     pthread_mutex_lock(&pl->mutex_current_download);
-    if (pl->current_download) {
+    if (*pl->current_download) {
         if (recycle) {
             fdownloader_config(dl);
         }
         // set the url
-        printf("Setting the url %s(%s) for the song downloader %p\n", pl->current_download->audio, pl->current_download->title, dl);
+        printf("Setting the url %s(%s) for the song downloader %p\n", (*pl->current_download)->audio, (*pl->current_download)->title, dl);
         // need to reset the get method ..deh
         curl_easy_setopt(dl->curl, CURLOPT_HTTPGET, 1);
         // reset headers
         curl_easy_setopt(dl->curl, CURLOPT_HTTPHEADER, NULL);
-        curl_easy_setopt(dl->curl, CURLOPT_URL, pl->current_download->audio);
+        curl_easy_setopt(dl->curl, CURLOPT_URL, (*pl->current_download)->audio);
         printf("File path %s is copied to the song\n", dl->content.fbuf->filepath);
-        strcpy(pl->current_download->filepath, dl->content.fbuf->filepath);
-        pl->current_download->downloader = dl;
-        dl->data = pl->current_download;
-        pl->current_download = pl->current_download->next;
+        strcpy((*pl->current_download)->filepath, dl->content.fbuf->filepath);
+        (*pl->current_download)->downloader = dl;
+        dl->data = *pl->current_download;
+        pl->current_download = &(*pl->current_download)->next;
         ret = 0;
     } else {
         /*printf("Current download is NULL. Skipping\n");*/
@@ -742,8 +743,8 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base
     if (ret == 0) {
         if (reset_current) {
             // reset the download flag
-            pl->current_download = pl->current;
-            printf("Resetting current download to %s / %s with url %s\n", pl->current_download->artist, pl->current_download->title, pl->current_download->audio);
+            pl->current_download = &pl->current;
+            printf("Resetting current download to %s / %s with url %s\n", (*pl->current_download)->artist, (*pl->current_download)->title, (*pl->current_download)->audio);
             // signal the condition
             pthread_cond_signal(&pl->cond_song_download_restart);
             // we should reset the stop flag to 0; because at this stage the download thread should definitely go on

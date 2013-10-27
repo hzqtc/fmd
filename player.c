@@ -366,12 +366,12 @@ int fm_player_set_song(fm_player_t *pl, fm_song_t *song)
     }
 
     // set the song
-    if (song->filepath[0] == '\0') {
-        printf("No filepath associated with the song\n");
-        return -1;
-    }
-    /*printf("Blocking on waiting for filepath being assigned\n");*/
-    /*while (song->filepath[0] == '\0'); */
+    /*if (song->filepath[0] == '\0') {*/
+        /*printf("No filepath associated with the song\n");*/
+        /*return -1;*/
+    /*}*/
+    printf("Blocking on waiting for filepath being assigned\n");
+    while (song->filepath[0] == '\0'); 
     printf("filepath is %s\n", song->filepath);
     pl->song = song;
 
