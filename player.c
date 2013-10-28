@@ -60,32 +60,26 @@ static SwrFormat get_dest_sample_fmt_from_sample_fmt(struct SwrContext **swr_ctx
 
 static int wait_new_content(fm_player_t *pl)
 {
-    if (!pl->song->downloader)
+    if (pl->song->downloader) {
+        pthread_mutex_lock(&pl->mutex_status);
+        printf("Waiting for some new content to arrive\n");
+        pthread_cond_wait(&pl->song->downloader->cond_new_content, &pl->mutex_status);
+        printf("Wait finished\n");
+        pthread_mutex_unlock(&pl->mutex_status);
+        return 0;
+    } else {
+        // there is no more downloader associated with this song
+        if (pl->tid_ack > 0) {
+            pthread_kill(pl->tid_ack, pl->sig_ack);
+        }
         return -1;
-    pthread_mutex_lock(&pl->mutex_status);
-    printf("Waiting for some new content to arrive\n");
-    pthread_cond_wait(&pl->song->downloader->cond_new_content, &pl->mutex_status);
-    printf("Wait finished\n");
-    pthread_mutex_unlock(&pl->mutex_status);
-    return 0;
+    }
 }
 
 static int open_song(fm_player_t *pl)
 {
-    // wait for the file to grow at least to a considerable size
-    printf("Blocking on waiting for the file to have some initial size\n");
-    struct stat st;
-    while (1) {
-        stat(pl->song->filepath, &st);
-        if (st.st_size >= HEADERBUF_SIZE)
-            break;
-        // wait on the variable
-        wait_new_content(pl);
-    }
-
     printf("Attempting to open the input\n");
     if (avformat_open_input(&pl->format_context, pl->song->filepath, NULL, NULL) < 0) {
-    /*if (avformat_open_input(&pl->format_context, "", pl->input_format, &options) < 0) {*/
         printf("Failure on opening the input stream\n");
         return -1;
     } else 
@@ -200,7 +194,15 @@ static void* play_thread(void *data)
         }
 
         if (!pl->context) {
-            printf("Attempting to open the song\n");
+            // wait for the file to grow at least to a considerable size
+            printf("Blocking on waiting for the file to have some initial size\n");
+            struct stat st;
+            stat(pl->song->filepath, &st);
+            if (st.st_size < HEADERBUF_SIZE) {
+                if (wait_new_content(pl) == 0) continue;
+                else return pl;
+            }
+
             if (open_song(pl) != 0) {
                 printf("Opening song failed. Retry again.\n");
                 close_song(pl);
@@ -213,15 +215,8 @@ static void* play_thread(void *data)
         if ((ret = av_read_frame(pl->format_context, &pl->avpkt)) < 0) {
             // couldn't decode the frame
             printf("Could not read the frame\n");
-            if (wait_new_content(pl) == 0) {
-                continue;
-            } else {
-                // there is no more downloader associated with this song
-                if (pl->tid_ack > 0) {
-                    pthread_kill(pl->tid_ack, pl->sig_ack);
-                }
-                return pl;
-            }
+            if (wait_new_content(pl) == 0) continue;
+            else return pl;
         }
         if (pl->avpkt.stream_index == pl->audio_stream_idx) {
             avcodec_get_frame_defaults(pl->frame);
