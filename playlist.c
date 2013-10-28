@@ -79,7 +79,9 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
             if (stat(song->filepath, &sts) == 0) {
                 char lp[128];
                 get_file_path(lp, pl->config.music_dir, song->artist, song->title, song->ext);
-                if (stat(lp, &sts) == -1 && errno == ENOENT) {
+                if (strcmp(song->filepath, lp) == 0)
+                    to_remove = 0;
+                else if (stat(lp, &sts) == -1 && errno == ENOENT) {
                     to_remove = 0;
                     printf("Attemping to cache the song for path %s\n", lp);
                     // first move the file to a secure location to avoid it being truncated later
@@ -391,11 +393,11 @@ static void fm_playlist_curl_jing_config(fm_playlist_t *pl, CURL *curl, char act
             sprintf(buf, "u=%d&q=%s&ps=5&tid=0&mt=&ss=true", pl->config.jing_uid, arg);
             curl_free(arg);
             break;
-        case 'b': 
+        case 'r': 
             format = "%s/music/post_love_song";
             sprintf(buf, "uid=%d&tid=%d", pl->config.jing_uid, pl->current->sid);
             break;
-        case 'u':
+        case 'b':
             format = "%s/music/post_hate_song";
             sprintf(buf, "uid=%d&tid=%d", pl->config.jing_uid, pl->current->sid);
             break;
@@ -478,7 +480,8 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **ba
     char buf[512];
     sprintf(buf,
             "IFS='\n';"
-            "args=($(find $'%s' -type f -print0 | xargs -0 file -iF'\t' | fgrep audio | cut -d'\t' -f1 | shuf | head -n '%d'));"
+            /*"args=($(find $'%s' -type f -print0 | xargs -0 file -iF'\t' | fgrep audio | cut -d'\t' -f1 | shuf | head -n '%d'));"*/
+            "args=($(find $'%s' -type f \\( -name '*.mp3' -o -name '*.m4a' \\) | shuf | head -n '%d'));"
             "mutagen -f '{title}\n{artist}\n{wors}\n{album}\n{year}\n{kbps}\n{path}\n{len}' \"${args[@]}\";"
             , pl->config.music_dir, N_LOCAL_CHANNEL_FETCH);
     printf("Local channel refilling command is: %s\n", buf);
