@@ -32,6 +32,8 @@ typedef struct fm_song {
     struct fm_song *next;
     // the total length for the song (in seconds)
     int length;
+    // the assumed file size for the song
+    double size;
     // the corresponding file path for this song
     char filepath[128];
     // the corresponding downloader (null if it's not being downloaded)

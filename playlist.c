@@ -14,12 +14,17 @@
 
 static char *douban_music_website = "http://music.douban.com";
 
+#define DOWNLOAD_DELTA_MARGIN 0.001
+
 static void song_downloader_stop(fm_playlist_t *pl, downloader_t *dl)
 {
     stack_downloader_stop(pl->stack, dl);
     // clean up the state
     fm_song_t *song = (fm_song_t *)dl->data;
     if (song) {
+        // try to read the size of the file
+        curl_easy_getinfo(dl->curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD, &song->size);
+        printf("curlinfo content size for song %s is %f\n", song->title, song->size);
         song->downloader = NULL;
         dl->data = NULL;
     }
@@ -77,11 +82,12 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
             struct stat sts;
             // must make sure that the tmp file exists and the dest file does not exist
             if (stat(song->filepath, &sts) == 0) {
+                printf("actual file size for song %s is %d\n", song->title, (int) sts.st_size);
                 char lp[128];
                 get_file_path(lp, pl->config.music_dir, song->artist, song->title, song->ext);
                 if (strcmp(song->filepath, lp) == 0)
                     to_remove = 0;
-                else if (stat(lp, &sts) == -1 && errno == ENOENT) {
+                else if (song->size - sts.st_size < DOWNLOAD_DELTA_MARGIN && stat(lp, &sts) == -1 && errno == ENOENT) {
                     to_remove = 0;
                     printf("Attemping to cache the song for path %s\n", lp);
                     // first move the file to a secure location to avoid it being truncated later
@@ -91,9 +97,9 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
                             "tmpimg=\"$src.jpg\";"
                             "mv \"$src\" \"$dest\";"
                             "src=\"$dest\";"
-                            "l=\"$(mutagen -f '{len}' \"$src\")\";"
-                            "ld=$((l - %d));"
-                            "(((ld < -2)) || ((ld > 2))) && rm -f \"$src\" && exit 0;"
+                            /*"l=\"$(mutagen -f '{len}' \"$src\")\";"*/
+                            /*"ld=$((l - %d));"*/
+                            /*"(((ld < -2)) || ((ld > 2))) && rm -f \"$src\" && exit 0;"*/
                             "artist=$'%s'; title=$'%s'; album=$'%s'; date='%d';"
                             "[[ \"$date\" =~ [0-9]{4} ]] && datearg=\"-Y $date\" || datearg=;"
                             "dest=$'%s';"
@@ -107,7 +113,7 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
                             "rm -f \"$tmpimg\") &", 
                             escapesh(btp, song->filepath), 
                             song->ext,
-                            song->length,
+                            /*song->length,*/
                             escapesh(bart, song->artist), 
                             escapesh(btitle, song->title), 
                             escapesh(balb, song->album), 
@@ -136,6 +142,7 @@ static void song_init(fm_song_t *song)
     song->pubdate = song->sid = song->like = song->length = 0;
     song->next = NULL;
     song->downloader = NULL;
+    song->size = 0;
 }
 
 static fm_song_t* fm_song_douban_parse_json(fm_playlist_t *pl, struct json_object *obj)
@@ -168,11 +175,11 @@ static json_object *fm_jing_parse_json_result(json_object *obj)
 {
     // here we are only going to parse the fetch_pls (conceivably)
     if (!obj) {
-        fprintf(stderr, "Attempting to parse null object\n");
+        printf("Attempting to parse null object\n");
         return NULL;
     }
     if (json_object_get_boolean(json_object_object_get(obj, "success")) == FALSE ) {
-        fprintf(stderr, "API error: %s\n", json_object_get_string(json_object_object_get(obj, "msg")));
+        printf("API error: %s\n", json_object_get_string(json_object_object_get(obj, "msg")));
         return NULL;
     }
     return json_object_object_get(obj, "result");
@@ -330,7 +337,7 @@ void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config, void (*fm
     pl->song_download_stop = 0;
     pl->song_downloaders[0] = NULL;
     pl->tid_download = 0;
-    pl->current_download = &pl->current;
+    pl->current_download = NULL;
     pthread_mutex_init(&pl->mutex_song_download_stop, NULL);
     pthread_mutex_init(&pl->mutex_current_download, NULL);
     pthread_cond_init(&pl->cond_song_download_restart, NULL);
@@ -353,7 +360,7 @@ static int fm_playlist_douban_parse_json(fm_playlist_t *pl, struct json_object *
     int i;
     int ret = json_object_get_int(json_object_object_get(obj, "r"));
     if (ret != 0) {
-        fprintf(stderr, "API error: %s\n", json_object_get_string(json_object_object_get(obj, "err")));
+        printf("API error: %s\n", json_object_get_string(json_object_object_get(obj, "err")));
     } else {
         printf("Douban playlist parsing new API response\n");
         array_list *songs = json_object_get_array(json_object_object_get(obj, "song"));
@@ -376,6 +383,14 @@ static void fm_playlist_curl_jing_headers_init(fm_playlist_t *pl, struct curl_sl
     *slist = curl_slist_append(*slist, buf);
     sprintf(buf, "Jing-R-Token-Header:%s", pl->config.jing_rtoken);
     *slist = curl_slist_append(*slist, buf);
+}
+
+static void fm_playlist_curl_init(CURL *curl)
+{
+    curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
+    curl_easy_setopt(curl, CURLOPT_HEADER, 0);
+    /*curl_easy_setopt(curl, CURLOPT_POSTFIELDS, NULL);*/
 }
 
 static void fm_playlist_curl_jing_config(fm_playlist_t *pl, CURL *curl, char act, struct curl_slist *slist, void *data)
@@ -411,6 +426,7 @@ static void fm_playlist_curl_jing_config(fm_playlist_t *pl, CURL *curl, char act
             break;
     }
 
+    fm_playlist_curl_init(curl);
     /*curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);*/
     curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, buf);
 
@@ -556,7 +572,7 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **ba
             if (len < size - 1)
                 lastf[len++] = ch;
             else {
-                fprintf(stderr, "Buffer overflow for song fields. Last recorded field = %s\n", lastf);
+                printf("Buffer overflow for song fields. Last recorded field = %s\n", lastf);
                 return -1;
             }
         }
@@ -581,35 +597,31 @@ static void fm_playlist_curl_douban_config(fm_playlist_t *pl, CURL *curl, char a
             pl->current ? pl->current->sid : 0, act, h_arg, pl->config.kbps);
     printf("Playlist request: %s\n", url);
 
-    curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
+    fm_playlist_curl_init(curl);
     curl_easy_setopt(curl, CURLOPT_URL, url);
 }
 
 // the recycle flag tells the function to reinit the states beforing proceeding
 static int song_downloader_init(fm_playlist_t *pl, downloader_t *dl, int recycle) {
-    int ret;
+    int ret = 0;
     pthread_mutex_lock(&pl->mutex_current_download);
-    if (*pl->current_download) {
+    if (pl->current_download && *pl->current_download) {
         if (recycle) {
             fdownloader_config(dl);
         }
         // set the url
         printf("Setting the url %s(%s) for the song downloader %p\n", (*pl->current_download)->audio, (*pl->current_download)->title, dl);
-        // need to reset the get method ..deh
-        curl_easy_setopt(dl->curl, CURLOPT_HTTPGET, 1);
-        // reset headers
-        curl_easy_setopt(dl->curl, CURLOPT_HTTPHEADER, NULL);
+        fm_playlist_curl_init(dl->curl);
         curl_easy_setopt(dl->curl, CURLOPT_URL, (*pl->current_download)->audio);
+        curl_easy_setopt(dl->curl, CURLOPT_HEADER, 1);
         printf("File path %s is copied to the song\n", dl->content.fbuf->filepath);
         strcpy((*pl->current_download)->filepath, dl->content.fbuf->filepath);
         (*pl->current_download)->downloader = dl;
         dl->data = *pl->current_download;
         pl->current_download = &(*pl->current_download)->next;
-        ret = 0;
     } else {
         /*printf("Current download is NULL. Skipping\n");*/
-        ret = 1;
+        ret = -1;
     }
     pthread_mutex_unlock(&pl->mutex_current_download);
     return ret;
@@ -671,7 +683,7 @@ static void* download_thread(void *data)
     return data;
 }
 
-static void start_song_downloaders(fm_playlist_t *pl)
+static void song_downloader_all_start(fm_playlist_t *pl)
 {
     // we must ensure that the downloaders are present
     if (!pl->song_downloaders[0]) {
@@ -695,12 +707,29 @@ static void start_song_downloaders(fm_playlist_t *pl)
     }
 }
 
+static void song_downloader_all_stop(fm_playlist_t *pl)
+{
+    if (pl->song_downloaders[0]) {
+        printf("All downloaders stopped\n");
+        int i;
+        for (i = sizeof(pl->song_downloaders) / sizeof(downloader_t *) - 1; i >= 0; i--) {
+            song_downloader_stop(pl, pl->song_downloaders[i]);
+        }
+    }
+}
+
 // base: the base to append the result in front of (NULL if result should be discarded)
 // clear_old, whether the old songs should be cleared; only used when base is not NULL
 // fallback: whether fallback should be used (use local station when network unavailable)
 static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base, int clear_old, int fallback)
 {
     if (pl->mode == plLocal) {
+        // first lock and reset the download pointer
+        pthread_mutex_lock(&pl->mutex_current_download);
+        pl->current_download = NULL;
+        pthread_mutex_unlock(&pl->mutex_current_download);
+        // stop all the downloaders
+        song_downloader_all_stop(pl);
         if (clear_old)
             fm_playlist_clear(pl);
         return fm_playlist_local_dump_parse_report(pl, base);
@@ -737,14 +766,7 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base
         pl->song_download_stop = 1;
         pthread_mutex_unlock(&pl->mutex_song_download_stop);
         // stop the song downloaders
-        printf("Stopping all downloaders\n");
-        if (pl->song_downloaders[0]) {
-            int i;
-            for (i = sizeof(pl->song_downloaders) / sizeof(downloader_t *) - 1; i >= 0; i--) {
-                song_downloader_stop(pl, pl->song_downloaders[i]);
-            }
-        }
-        printf("All downloaders stopped\n");
+        song_downloader_all_stop(pl);
     }
     // changing the song structure
     pthread_mutex_lock(&pl->mutex_current_download);
@@ -769,11 +791,11 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base
             pthread_mutex_unlock(&pl->mutex_song_download_stop);
         }  
         printf("Starting song downloaders\n");
-        start_song_downloaders(pl);
+        song_downloader_all_start(pl);
     } else {
-        fprintf(stderr, "Some error occurred during the process; Maybe network is down. \n");
+        printf("Some error occurred during the process; Maybe network is down. Output is %s\n", dl->content.mbuf->data);
         if (fallback) {
-            fprintf(stderr, "Trying again with local channel.\n");
+            printf("Trying again with local channel.\n");
             strcpy(pl->config.channel, LOCAL_CHANNEL);
             pl->mode = plLocal;
             return fm_playlist_send_report(pl, act, base, clear_old, 0);

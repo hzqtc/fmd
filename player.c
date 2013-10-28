@@ -37,7 +37,7 @@ static SwrFormat get_dest_sample_fmt_from_sample_fmt(struct SwrContext **swr_ctx
     if (!*swr_ctx) {
         *swr_ctx = swr_alloc();
         if (!*swr_ctx) {
-            fprintf(stderr, "Could not allocate resampler context\n");
+            printf("Could not allocate resampler context\n");
             return dest;
         }
     }
@@ -52,7 +52,7 @@ static SwrFormat get_dest_sample_fmt_from_sample_fmt(struct SwrContext **swr_ctx
 
     /* initialize the resampling context */
     if ((ret = swr_init(*swr_ctx)) < 0) {
-        fprintf(stderr, "Failed to initialize the resampling context\n");
+        printf("Failed to initialize the resampling context\n");
         return dest;
     }
     return dest;
@@ -88,7 +88,7 @@ static int open_song(fm_player_t *pl)
     // seek to the beginning of the file to avoid problem
     printf("Attempting to find the stream info\n");
     if (avformat_find_stream_info(pl->format_context, NULL) < 0) {
-        fprintf(stderr, "Cannot find stream info\n");
+        printf("Cannot find stream info\n");
         return -1;
     }
 
@@ -97,7 +97,7 @@ static int open_song(fm_player_t *pl)
     pl->audio_stream_idx = av_find_best_stream(pl->format_context, AVMEDIA_TYPE_AUDIO, -1, -1, &pl->codec, 0);
 
     if (pl->audio_stream_idx < 0) {
-        fprintf(stderr,"Couldn't find stream information\n");
+        printf("Couldn't find stream information\n");
         return -1;
     }
     // Get a pointer to the codec context for the audio stream
@@ -109,7 +109,7 @@ static int open_song(fm_player_t *pl)
 
     printf("Attempting to open the codec\n");
     if (avcodec_open2(pl->context, pl->codec, NULL) < 0) {
-        fprintf(stderr, "Could not open codec\n");
+        printf("Could not open codec\n");
         return -1;
     }
     
@@ -135,7 +135,7 @@ static int open_song(fm_player_t *pl)
             printf("Resampling needs to be done\n"); 
             pl->dest_swr_format = get_dest_sample_fmt_from_sample_fmt(&pl->swr_context, pl->src_swr_format);
             if (!pl->swr_context) {
-                fprintf(stderr, "Cannot resample the data in the specified stream. Sample fmt is %d\n", pl->src_swr_format.sample_fmt);
+                printf("Cannot resample the data in the specified stream. Sample fmt is %d\n", pl->src_swr_format.sample_fmt);
                 return -1;
             }
             break;
@@ -193,6 +193,11 @@ static void* play_thread(void *data)
             break;
         }
 
+        if (pl->song->filepath[0] == '\0') {
+            printf("Blocking on waiting for filepath being assigned\n");
+            continue;
+        }
+
         if (!pl->context) {
             // wait for the file to grow at least to a considerable size
             printf("Blocking on waiting for the file to have some initial size\n");
@@ -223,7 +228,7 @@ static void* play_thread(void *data)
             /*printf("Attempting to decode the music\n");*/
             ret = avcodec_decode_audio4(pl->context, pl->frame, &got_frame, &pl->avpkt);
             if (ret < 0) {
-                fprintf(stderr, "Error decoding audio\n");
+                printf("Error decoding audio\n");
                 continue;
             } else if (got_frame) {
                 /*printf("Got frame to play\n");*/
@@ -237,7 +242,7 @@ static void* play_thread(void *data)
                         if (pl->swr_buf)
                             av_freep(*pl->swr_buf);
                         if (av_samples_alloc_array_and_samples(&pl->swr_buf, pl->frame->linesize, pl->frame->channels, dest_nb_samples, pl->dest_swr_format.sample_fmt, 0) < 0) {
-                            fprintf(stderr, "Could not allocate destination samples\n");
+                            printf("Could not allocate destination samples\n");
                             exit(-1);
                         }
                         pl->dest_swr_nb_samples = dest_nb_samples;
@@ -245,7 +250,7 @@ static void* play_thread(void *data)
                     // covert to destination format
                     ret = swr_convert(pl->swr_context, pl->swr_buf, dest_nb_samples, (const uint8_t **) pl->frame->extended_data, pl->frame->nb_samples);
                     if (ret < 0) {
-                        fprintf(stderr, "Could not resample the audio\n");
+                        printf("Could not resample the audio\n");
                         exit(-1);
                     } 
                     // get the resampled buffer size
@@ -262,7 +267,7 @@ static void* play_thread(void *data)
                         pl->interweave_buf = av_malloc(ao_size);
                         if (!pl->interweave_buf) {
                             // Not enough memory - shouldn't happen 
-                            fprintf(stderr, "Unable to allocate the buffer\n");
+                            printf("Unable to allocate the buffer\n");
                         }
                         pl->interweave_buf_size = ao_size;
                     }
@@ -361,13 +366,6 @@ int fm_player_set_song(fm_player_t *pl, fm_song_t *song)
     }
 
     // set the song
-    if (song->filepath[0] == '\0') {
-        printf("No filepath associated with the song\n");
-        return -1;
-    }
-    /*printf("Blocking on waiting for filepath being assigned\n");*/
-    /*while (song->filepath[0] == '\0'); */
-    printf("filepath is %s\n", song->filepath);
     pl->song = song;
 
     // set the relevant properties
