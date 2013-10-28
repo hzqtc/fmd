@@ -10,6 +10,13 @@ static void get_tmp_filepath(char *filepath)
     sprintf(filepath, "/tmp/fmctmp%d", tmp_count++);
 }
 
+static void downloader_curl_reset(downloader_t *dl)
+{
+    curl_easy_reset(dl->curl);
+    curl_easy_setopt(dl->curl, CURLOPT_PRIVATE, dl);
+    curl_easy_setopt(dl->curl, CURLOPT_WRITEDATA, dl);
+}
+
 // init the downloader by setting all the relevant fields
 downloader_t *downloader_init()
 {
@@ -22,9 +29,8 @@ downloader_t *downloader_init()
     dl->data = NULL;
     dl->content.mbuf = NULL;
     // set the handle's private field to point to the downloader itself so that later it can be easily retrieved
-    curl_easy_setopt(dl->curl, CURLOPT_PRIVATE, dl);
-    curl_easy_setopt(dl->curl, CURLOPT_WRITEDATA, dl);
-    curl_easy_setopt(dl->curl, CURLOPT_VERBOSE, dl);
+    downloader_curl_reset(dl);
+    /*curl_easy_setopt(dl->curl, CURLOPT_VERBOSE, 1);*/
     // initialize the conditional variable
     pthread_cond_init(&dl->cond_new_content, NULL);
     return dl;
@@ -211,6 +217,8 @@ void stack_downloader_stop(downloader_stack_t *stack, downloader_t *d)
         }
         // remove the handle from the multi_handle
         curl_multi_remove_handle(stack->multi_handle, d->curl);
+        // reset the curl instance
+        downloader_curl_reset(d);
     }
 }
 
@@ -236,6 +244,7 @@ int stack_downloader_is_idle(downloader_stack_t *stack, downloader_t *dl)
 void stack_downloader_init(downloader_stack_t *stack, downloader_t *dl) 
 {
     printf("Downloader %p on mode %d inited and added to the stack\n", dl, dl->mode);
+    // reset the curl handle first
     curl_multi_add_handle(stack->multi_handle, dl->curl);
     // set the idle attribute for the downloader
     dl->idle = 0;

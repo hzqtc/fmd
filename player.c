@@ -100,6 +100,10 @@ static int open_song(fm_player_t *pl)
         printf("Couldn't find stream information\n");
         return -1;
     }
+
+    // check for bitrate
+    /*printf("The estimated bitrate of the song is %d\n", pl->format_context->bit_rate);*/
+
     // Get a pointer to the codec context for the audio stream
     AVStream *stream = pl->format_context->streams[pl->audio_stream_idx];
     // set the timebase
@@ -194,21 +198,19 @@ static void* play_thread(void *data)
         }
 
         if (pl->song->filepath[0] == '\0') {
-            printf("Blocking on waiting for filepath being assigned\n");
+            /*printf("Blocking on waiting for filepath being assigned\n");*/
             continue;
         }
 
         if (!pl->context) {
             // wait for the file to grow at least to a considerable size
-            printf("Blocking on waiting for the file to have some initial size\n");
             struct stat st;
             stat(pl->song->filepath, &st);
             if (st.st_size < HEADERBUF_SIZE) {
+                printf("Blocking on waiting for the file to have some initial size\n");
                 if (wait_new_content(pl) == 0) continue;
                 else return pl;
-            }
-
-            if (open_song(pl) != 0) {
+            } else if (open_song(pl) != 0) {
                 printf("Opening song failed. Retry again.\n");
                 close_song(pl);
                 continue;

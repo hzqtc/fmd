@@ -2,6 +2,7 @@
 #define _FM_PLAYLIST_H_
 
 #include "downloader.h"
+#include "validator.h"
 #include <curl/curl.h>
 #define LOCAL_CHANNEL "999"
 // out of them 1 is used for emergency (when all downloaders are downloading
@@ -32,8 +33,8 @@ typedef struct fm_song {
     struct fm_song *next;
     // the total length for the song (in seconds)
     int length;
-    // the assumed file size for the song
-    double size;
+    // the validator to validate whether a given file is a valid/full download
+    validator_t validator;
     // the corresponding file path for this song
     char filepath[128];
     // the corresponding downloader (null if it's not being downloaded)
