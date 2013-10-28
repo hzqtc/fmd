@@ -58,7 +58,7 @@ static void get_file_path(char *buf, char *directory, char *artist, char *title,
     if (title[0] == '\0')
         title = "Unknown";
     sprintf(buf, "%s/%s/%s.%s", directory, artist, title, ext);
-    printf("The obtained file path is %s\n", buf);
+    /*printf("The obtained file path is %s\n", buf);*/
 }
 
 static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
@@ -130,9 +130,18 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
     free(song);
 }
 
+static void song_init(fm_song_t *song)
+{
+    song->title[0] = song->artist[0] = song->kbps[0] = song->album[0] = song->cover[0] = song->url[0] = song->audio[0] = song->ext[0] = song->filepath[0] = '\0';
+    song->pubdate = song->sid = song->like = song->length = 0;
+    song->next = NULL;
+    song->downloader = NULL;
+}
+
 static fm_song_t* fm_song_douban_parse_json(fm_playlist_t *pl, struct json_object *obj)
 {
     fm_song_t *song = (fm_song_t*) malloc(sizeof(fm_song_t));
+    song_init(song);
     strcpy(song->title, json_object_get_string(json_object_object_get(obj, "title")));
     strcpy(song->artist, json_object_get_string(json_object_object_get(obj, "artist")));
     strcpy(song->kbps, json_object_get_string(json_object_object_get(obj, "kbps")));
@@ -146,7 +155,6 @@ static fm_song_t* fm_song_douban_parse_json(fm_playlist_t *pl, struct json_objec
     song->sid = json_object_get_int(json_object_object_get(obj, "sid"));
     song->like = json_object_get_int(json_object_object_get(obj, "like"));
     song->length = json_object_get_int(json_object_object_get(obj, "length"));
-    song->filepath[0] = '\0';
     strcpy(song->ext, "mp3");
     if (song->sid == 0) {
         fm_song_free(pl, song);
@@ -173,6 +181,7 @@ static json_object *fm_jing_parse_json_result(json_object *obj)
 static fm_song_t* fm_song_jing_parse_json(fm_playlist_t *pl, struct json_object *obj)
 {
     fm_song_t *song = (fm_song_t*) malloc(sizeof(fm_song_t));
+    song_init(song);
     // for the audio link we have to perform a retrieve
     song->sid = json_object_get_int(json_object_object_get(obj, "tid")); 
     /*printf("Jing song parser: sid is %d\n", song->sid);*/
@@ -186,8 +195,6 @@ static fm_song_t* fm_song_jing_parse_json(fm_playlist_t *pl, struct json_object 
     strcpy(song->kbps, "192");
     strcpy(song->album, json_object_get_string(json_object_object_get(obj, "an")));
     /*printf("Jing song parser: album is %s\n", song->album);*/
-    // jing does not provide release date either
-    song->pubdate = 0;
     song->length = json_object_get_int(json_object_object_get(obj, "d"));
     const char *cover = json_object_get_string(json_object_object_get(obj, "fid"));
     if (strlen(cover) >= 13) {
@@ -207,12 +214,7 @@ static fm_song_t* fm_song_jing_parse_json(fm_playlist_t *pl, struct json_object 
     } else {
         song->cover[0] = '\0';
     }
-    // jing does not provide a url link...
-    song->url[0] = '\0';
-    song->filepath[0] = '\0';
     strcpy(song->ext, "m4a");
-    // for like we need to retrieve again...
-    song->like = 0;
     return song;
 }
 
@@ -292,6 +294,8 @@ static fm_song_t* fm_playlist_pop_front(fm_playlist_t *pl)
 
 static void fm_playlist_clear(fm_playlist_t *pl)
 {
+    printf("Clearing old songs\n");
+    pl->fm_player_stop();
     fm_song_t *s = pl->current;
     fm_song_t *next;
     while (s) {
@@ -335,7 +339,6 @@ void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config, void (*fm
 void fm_playlist_cleanup(fm_playlist_t *pl)
 {
     fm_playlist_hisotry_clear(pl);
-    pl->fm_player_stop();
     fm_playlist_clear(pl);
     stack_free(pl->stack);
     pthread_mutex_destroy(&pl->mutex_song_download_stop);
@@ -533,8 +536,8 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **ba
                 if (ch == EOF)
                     break; 
                 song = (fm_song_t*) malloc(sizeof(fm_song_t));
-                song->sid = song->like = 1;
-                song->cover[0] = '\0';
+                song_init(song);
+                song->like = 1;
             }
             fn = (fn+1) % fl;
             // set up the last field
@@ -746,7 +749,6 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base
     // changing the song structure
     pthread_mutex_lock(&pl->mutex_current_download);
     if (clear_old) {
-        printf("Clearing old songs\n");
         fm_playlist_clear(pl);
     }
     printf("Attempting to parse the output\n");
