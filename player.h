@@ -25,7 +25,7 @@ enum fm_player_status {
 
 typedef struct {
     // in time_base format
-    int duration;
+    unsigned long duration;
     // in seconds
     int length;
     AVRational time_base;
