@@ -110,7 +110,6 @@ static int open_song(fm_player_t *pl)
     // set the timebase
     pl->info.time_base = stream->time_base;
     pl->context = stream->codec;
-    av_opt_set_int(pl->context, "refcounted_frames", 1, 0);
 
     printf("Attempting to open the codec\n");
     if (avcodec_open2(pl->context, pl->codec, NULL) < 0) {
@@ -221,6 +220,8 @@ static void* play_thread(void *data)
         // decode the frame
         /*printf("Attempting to read the frame\n");*/
         if ((ret = av_read_frame(pl->format_context, &pl->avpkt)) < 0) {
+            // free the packet first
+            av_free_packet(&pl->avpkt);
             // couldn't decode the frame
             printf("Could not read the frame\n");
             if (wait_new_content(pl) == 0) continue;
@@ -232,7 +233,6 @@ static void* play_thread(void *data)
             ret = avcodec_decode_audio4(pl->context, pl->frame, &got_frame, &pl->avpkt);
             if (ret < 0) {
                 printf("Error decoding audio\n");
-                continue;
             } else if (got_frame) {
                 /*printf("Got frame to play\n");*/
                 ao_size = av_samples_get_buffer_size(NULL, pl->frame->channels, pl->frame->nb_samples, pl->frame->format, 1);
@@ -242,6 +242,7 @@ static void* play_thread(void *data)
                 if (pl->resampled) {
                     dest_nb_samples = av_rescale_rnd(swr_get_delay(pl->swr_context, pl->src_swr_format.sample_rate) + pl->frame->nb_samples, pl->src_swr_format.sample_rate, pl->src_swr_format.sample_rate, AV_ROUND_UP);
                     if (dest_nb_samples > pl->dest_swr_nb_samples) {
+                        printf("dest_nb_samples %d exceeding current nb %d. Reallocating the resampling buffer\n", dest_nb_samples, pl->dest_swr_nb_samples);
                         if (pl->swr_buf)
                             av_freep(*pl->swr_buf);
                         if (av_samples_alloc_array_and_samples(&pl->swr_buf, pl->frame->linesize, pl->frame->channels, dest_nb_samples, pl->dest_swr_format.sample_fmt, 0) < 0) {
@@ -265,6 +266,7 @@ static void* play_thread(void *data)
                     unsigned sample_size = av_get_bytes_per_sample(pl->dest_swr_format.sample_fmt);
                     // printf("Copying multiple channels\n");
                     if(pl->interweave_buf_size < ao_size) {
+                        printf("buf size %d exceeding current interweave buf size %d. Reallocating the interweave buffer\n", ao_size, pl->interweave_buf_size);
                         if (pl->interweave_buf)
                             av_freep(pl->interweave_buf);
                         pl->interweave_buf = av_malloc(ao_size);
@@ -289,6 +291,7 @@ static void* play_thread(void *data)
                 pl->info.duration += pl->avpkt.duration;
             }
         }
+        av_free_packet(&pl->avpkt);
     }
 
     return pl;
@@ -363,7 +366,6 @@ void fm_player_close(fm_player_t *pl)
 
     // free the ffmpeg stuff
     av_frame_free(&pl->frame);
-    av_free_packet(&pl->avpkt);
     if (pl->interweave_buf)
         av_freep(pl->interweave_buf);
     if (pl->swr_context)
