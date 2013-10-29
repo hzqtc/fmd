@@ -18,11 +18,14 @@ static void song_downloader_stop(fm_playlist_t *pl, downloader_t *dl)
 {
     stack_downloader_stop(pl->stack, dl);
     // clean up the state
+    pthread_mutex_lock(&pl->mutex_song_downloader);
     fm_song_t *song = (fm_song_t *)dl->data;
     if (song) {
         song->downloader = NULL;
         dl->data = NULL;
     }
+    pthread_mutex_unlock(&pl->mutex_song_downloader);
+    pthread_cond_signal(&dl->cond_new_content);
 }
 
 void fm_playlist_update_mode(fm_playlist_t *pl)
@@ -64,9 +67,13 @@ static void get_file_path(char *buf, char *directory, char *artist, char *title,
 static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
 {
     // first notify the downloader to stop
+    pthread_mutex_lock(&pl->mutex_song_downloader);
     if (song->downloader) {
-        song_downloader_stop(pl, song->downloader);
+        stack_downloader_stop(pl->stack, song->downloader);
+        song->downloader->data = NULL;
+        song->downloader = NULL;
     }
+    pthread_mutex_unlock(&pl->mutex_song_downloader);
 
     int to_remove = 1;
     // now check: if we should cache this song / if we should delete the tmp buffer associated with this song
@@ -130,7 +137,7 @@ static void fm_song_free(fm_playlist_t *pl, fm_song_t *song)
     free(song);
 }
 
-static fm_song_t *song_init()
+static fm_song_t *song_init(fm_playlist_t *pl)
 {
     fm_song_t *song = (fm_song_t*) malloc(sizeof(fm_song_t));
     song->title[0] = song->artist[0] = song->kbps[0] = song->album[0] = song->cover[0] = song->url[0] = song->audio[0] = song->ext[0] = song->filepath[0] = '\0';
@@ -138,12 +145,13 @@ static fm_song_t *song_init()
     song->next = NULL;
     song->downloader = NULL;
     validator_init(&song->validator);
+    song->mutex_downloader = &pl->mutex_song_downloader;
     return song;
 }
 
 static fm_song_t *fm_song_douban_parse_json(fm_playlist_t *pl, struct json_object *obj)
 {
-    fm_song_t *song = song_init();
+    fm_song_t *song = song_init(pl);
     strcpy(song->title, json_object_get_string(json_object_object_get(obj, "title")));
     strcpy(song->artist, json_object_get_string(json_object_object_get(obj, "artist")));
     strcpy(song->kbps, json_object_get_string(json_object_object_get(obj, "kbps")));
@@ -184,7 +192,7 @@ static json_object *fm_jing_parse_json_result(json_object *obj)
 
 static fm_song_t* fm_song_jing_parse_json(fm_playlist_t *pl, struct json_object *obj)
 {
-    fm_song_t *song = song_init();
+    fm_song_t *song = song_init(pl);
     // for the audio link we have to perform a retrieve
     song->sid = json_object_get_int(json_object_object_get(obj, "tid")); 
     /*printf("Jing song parser: sid is %d\n", song->sid);*/
@@ -337,6 +345,7 @@ void fm_playlist_init(fm_playlist_t *pl, fm_playlist_config_t *config, void (*fm
     pl->current_download = NULL;
     pthread_mutex_init(&pl->mutex_song_download_stop, NULL);
     pthread_mutex_init(&pl->mutex_current_download, NULL);
+    pthread_mutex_init(&pl->mutex_song_downloader, NULL);
     pthread_cond_init(&pl->cond_song_download_restart, NULL);
 }
 
@@ -347,6 +356,7 @@ void fm_playlist_cleanup(fm_playlist_t *pl)
     stack_free(pl->stack);
     pthread_mutex_destroy(&pl->mutex_song_download_stop);
     pthread_mutex_destroy(&pl->mutex_current_download);
+    pthread_mutex_destroy(&pl->mutex_song_downloader);
     pthread_cond_destroy(&pl->cond_song_download_restart);
 }
 
@@ -539,7 +549,7 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **ba
                 fm_playlist_push_front(base, song);
                 if (ch == EOF)
                     break; 
-                song = song_init();
+                song = song_init(pl);
                 song->like = 1;
             }
             fn = (fn+1) % fl;

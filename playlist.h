@@ -39,6 +39,8 @@ typedef struct fm_song {
     char filepath[128];
     // the corresponding downloader (null if it's not being downloaded)
     downloader_t *downloader;
+    // the corresponding mutex to lock the downloader
+    pthread_mutex_t *mutex_downloader;
 } fm_song_t;
 
 typedef struct fm_history {
@@ -96,6 +98,7 @@ typedef struct {
     fm_song_t **current_download;
     pthread_mutex_t mutex_song_download_stop;
     pthread_mutex_t mutex_current_download;
+    pthread_mutex_t mutex_song_downloader;
     pthread_cond_t cond_song_download_restart;
 } fm_playlist_t;
 

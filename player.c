@@ -60,20 +60,21 @@ static SwrFormat get_dest_sample_fmt_from_sample_fmt(struct SwrContext **swr_ctx
 
 static int wait_new_content(fm_player_t *pl)
 {
+    int ret = 0;
+    pthread_mutex_lock(pl->song->mutex_downloader);
     if (pl->song->downloader) {
-        pthread_mutex_lock(&pl->mutex_status);
         printf("Waiting for some new content to arrive\n");
-        pthread_cond_wait(&pl->song->downloader->cond_new_content, &pl->mutex_status);
+        pthread_cond_wait(&pl->song->downloader->cond_new_content, pl->song->mutex_downloader);
         printf("Wait finished\n");
-        pthread_mutex_unlock(&pl->mutex_status);
-        return 0;
     } else {
         // there is no more downloader associated with this song
         if (pl->tid_ack > 0) {
             pthread_kill(pl->tid_ack, pl->sig_ack);
         }
-        return -1;
+        ret = -1;
     }
+    pthread_mutex_unlock(pl->song->mutex_downloader);
+    return ret;
 }
 
 static int open_song(fm_player_t *pl)
