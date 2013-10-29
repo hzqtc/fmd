@@ -327,15 +327,28 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
 
     pthread_mutex_init(&pl->mutex_status, NULL);
     pthread_cond_init(&pl->cond_play, NULL);
-    pl->song = NULL;
 
     pl->status = FM_PLAYER_STOP;
 
+    pl->song = NULL;
     pl->context = NULL;
     pl->format_context = NULL;
+    pl->codec = NULL;
+    pl->audio_stream_idx = 0;
 
     // intialize the av frame
     pl->frame = av_frame_alloc();
+
+    // interweave buffer setting
+    pl->interweave_buf = NULL;
+    pl->interweave_buf_size = 0;
+
+    // swr settings
+    pl->resampled = 0;
+    pl->swr_context = NULL;
+    pl->swr_buf = NULL;
+    pl->dest_swr_nb_samples = 0;
+
     return 0;
 }
 
@@ -402,7 +415,6 @@ int fm_player_length(fm_player_t *pl)
 void fm_player_play(fm_player_t *pl)
 {
     printf("Player play\n");
-    printf("playlist instance is %p\n", pl);
     if (pl->status == FM_PLAYER_STOP) {
         pl->status = FM_PLAYER_PLAY;
         printf("Creating play thread\n");
