@@ -160,6 +160,22 @@ static void close_song(fm_player_t *pl)
         avformat_close_input(&pl->format_context);
         pl->format_context = NULL;
     }
+    // close the resampling context, if any
+    if (pl->swr_context) {
+        swr_free(&pl->swr_context);
+        pl->swr_context = NULL;
+    }
+    if (pl->swr_buf) {
+        av_freep(pl->swr_buf);
+        pl->swr_buf = NULL;
+        pl->dest_swr_nb_samples = 0;
+    }
+    // close the interweave buf, if any
+    if (pl->interweave_buf) {
+        av_freep(&pl->interweave_buf);
+        pl->interweave_buf = NULL;
+        pl->interweave_buf_size = 0;
+    }
 }
 
 static void* play_thread(void *data)
@@ -244,7 +260,7 @@ static void* play_thread(void *data)
                     if (dest_nb_samples > pl->dest_swr_nb_samples) {
                         printf("dest_nb_samples %d exceeding current nb %d. Reallocating the resampling buffer\n", dest_nb_samples, pl->dest_swr_nb_samples);
                         if (pl->swr_buf)
-                            av_freep(*pl->swr_buf);
+                            av_freep(pl->swr_buf);
                         if (av_samples_alloc_array_and_samples(&pl->swr_buf, pl->frame->linesize, pl->frame->channels, dest_nb_samples, pl->dest_swr_format.sample_fmt, 0) < 0) {
                             printf("Could not allocate destination samples\n");
                             exit(-1);
@@ -268,7 +284,7 @@ static void* play_thread(void *data)
                     if(pl->interweave_buf_size < ao_size) {
                         printf("buf size %d exceeding current interweave buf size %d. Reallocating the interweave buffer\n", ao_size, pl->interweave_buf_size);
                         if (pl->interweave_buf)
-                            av_freep(pl->interweave_buf);
+                            av_freep(&pl->interweave_buf);
                         pl->interweave_buf = av_malloc(ao_size);
                         if (!pl->interweave_buf) {
                             // Not enough memory - shouldn't happen 
@@ -366,12 +382,6 @@ void fm_player_close(fm_player_t *pl)
 
     // free the ffmpeg stuff
     av_frame_free(&pl->frame);
-    if (pl->interweave_buf)
-        av_freep(pl->interweave_buf);
-    if (pl->swr_context)
-        av_free(&pl->swr_context);
-    if (pl->swr_buf)
-        av_freep(*pl->swr_buf);
 }
 
 int fm_player_set_song(fm_player_t *pl, fm_song_t *song)
@@ -390,10 +400,6 @@ int fm_player_set_song(fm_player_t *pl, fm_song_t *song)
     pl->info.duration = 0;
     pl->info.time_base.num = pl->info.time_base.den = 1;
     pl->info.length = song->length;
-
-    // clear the necessary contexts
-    /*pl->format_context = NULL;*/
-    /*pl->context = NULL;*/
 
     return 0;
 }
@@ -448,12 +454,13 @@ void fm_player_stop(fm_player_t *pl)
         pthread_mutex_unlock(&pl->mutex_status);
         pthread_cond_signal(&pl->cond_play);
         printf("Trying to signal cond new content\n");
-        if (pl->song->downloader)
+        if (pl->song && pl->song->downloader)
             pthread_cond_signal(&pl->song->downloader->cond_new_content);
 
         pthread_join(pl->tid_play, NULL);
 
         close_song(pl);
+        pl->song = NULL;
     }
 }
 
