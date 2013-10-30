@@ -518,8 +518,7 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **ba
     char buf[512];
     sprintf(buf,
             "IFS='\n';"
-            /*"args=($(find $'%s' -type f -print0 | xargs -0 file -iF'\t' | fgrep audio | cut -d'\t' -f1 | shuf | head -n '%d'));"*/
-            "args=($(find $'%s' -type f -mmin +2 \\( -name '*.mp3' -o -name '*.m4a' \\) | shuf | head -n '%d'));"
+            "args=($(find $'%s' -type f -mmin +2 -print0 | xargs -0 file -iF'\t' | fgrep audio | cut -d'\t' -f1 | shuf | head -n '%d'));"
             "mutagen -f '{title}\n{artist}\n{wors}\n{album}\n{year}\n{kbps}\n{path}\n{len}' \"${args[@]}\";"
             , pl->config.music_dir, N_LOCAL_CHANNEL_FETCH);
     printf("Local channel refilling command is: %s\n", buf);
