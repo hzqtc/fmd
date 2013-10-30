@@ -152,21 +152,26 @@ static fm_song_t *song_init(fm_playlist_t *pl)
 static fm_song_t *fm_song_douban_parse_json(fm_playlist_t *pl, struct json_object *obj)
 {
     fm_song_t *song = song_init(pl);
+    song->sid = json_object_get_int(json_object_object_get(obj, "sid"));
     strcpy(song->title, json_object_get_string(json_object_object_get(obj, "title")));
     strcpy(song->artist, json_object_get_string(json_object_object_get(obj, "artist")));
-    strcpy(song->kbps, json_object_get_string(json_object_object_get(obj, "kbps")));
     strcpy(song->album, json_object_get_string(json_object_object_get(obj, "albumtitle")));
     song->pubdate = json_object_get_int(json_object_object_get(obj, "public_time"));
     strcpy(song->cover, json_object_get_string(json_object_object_get(obj, "picture")));
-    // the url form is NOT helpful. We should automatically add the music.douban.com prefix
-    // add the music website suffix (we know that this parser is only used for douban network
     sprintf(song->url, "%s%s", douban_music_website, json_object_get_string(json_object_object_get(obj, "album")));
-    strcpy(song->audio, json_object_get_string(json_object_object_get(obj, "url")));
-    song->sid = json_object_get_int(json_object_object_get(obj, "sid"));
     song->like = json_object_get_int(json_object_object_get(obj, "like"));
-    song->length = json_object_get_int(json_object_object_get(obj, "length"));
     strcpy(song->ext, "mp3");
+    strcpy(song->kbps, json_object_get_string(json_object_object_get(obj, "kbps")));
+    song->length = json_object_get_int(json_object_object_get(obj, "length"));
     validator_sha256_init(&song->validator, json_object_get_string(json_object_object_get(obj, "sha256")));
+    // check if we can substitute the audio field with a local path
+    get_file_path(song->filepath, pl->config.music_dir, song->artist, song->title, song->ext);
+    if (!validate(&song->validator, song->filepath)) {
+        song->filepath[0] = '\0';
+        strcpy(song->audio, json_object_get_string(json_object_object_get(obj, "url")));
+    } else {
+        printf("Detected local audio file for song %s/%s. Using the file directly instead of downloading.\n", song->artist, song->title);
+    }
     
     if (song->sid == 0) {
         fm_song_free(pl, song);
@@ -195,18 +200,9 @@ static fm_song_t* fm_song_jing_parse_json(fm_playlist_t *pl, struct json_object 
     fm_song_t *song = song_init(pl);
     // for the audio link we have to perform a retrieve
     song->sid = json_object_get_int(json_object_object_get(obj, "tid")); 
-    /*printf("Jing song parser: sid is %d\n", song->sid);*/
-    strcpy(song->audio, json_object_get_string(json_object_object_get(obj, "mid")));
-    // save the mid first
-    /*printf("Jing song parser: song url is %s\n", song->audio);*/
     strcpy(song->title, json_object_get_string(json_object_object_get(obj, "n")));
-    /*printf("Jing song parser: title is %s\n", song->title);*/
     strcpy(song->artist, json_object_get_string(json_object_object_get(obj, "atn")));
-    /*printf("Jing song parser: artist is %s\n", song->artist);*/
-    strcpy(song->kbps, "192");
     strcpy(song->album, json_object_get_string(json_object_object_get(obj, "an")));
-    /*printf("Jing song parser: album is %s\n", song->album);*/
-    song->length = json_object_get_int(json_object_object_get(obj, "d"));
     const char *cover = json_object_get_string(json_object_object_get(obj, "fid"));
     if (strlen(cover) >= 13) {
         char buf[50] = "";
@@ -221,12 +217,19 @@ static fm_song_t* fm_song_jing_parse_json(fm_playlist_t *pl, struct json_object 
         strcat(buf, "/AM");
         strcat(buf, cover);
         sprintf(song->cover, "http://img.jing.fm/album/AM/%s", buf);
-        /*printf("Jing song parser: song cover image is %s\n", song->cover);*/
-    } else {
-        song->cover[0] = '\0';
-    }
+    } 
     strcpy(song->ext, "m4a");
+    strcpy(song->kbps, "192");
+    song->length = json_object_get_int(json_object_object_get(obj, "d"));
     validator_filesize_init(&song->validator, json_object_get_int(json_object_object_get(obj, "fs")));
+    // check if we can substitute the audio field with a local path
+    get_file_path(song->filepath, pl->config.music_dir, song->artist, song->title, song->ext);
+    if (!validate(&song->validator, song->filepath)) {
+        song->filepath[0] = '\0';
+        strcpy(song->audio, json_object_get_string(json_object_object_get(obj, "mid")));
+    } else {
+        printf("Detected local audio file for song %s/%s. Using the file directly instead of downloading.\n", song->artist, song->title);
+    }  
     return song;
 }
 
@@ -451,32 +454,50 @@ static int fm_playlist_jing_parse_json(fm_playlist_t *pl, struct json_object *ob
             // get the len number of downloaders
             downloader_t *dls[len * 2];
             stack_get_idle_downloaders(pl->stack, dls, len * 2, dMem);
+            int used = 0;
 
             struct curl_slist *slist;
             fm_playlist_curl_jing_headers_init(pl, &slist);
             for (i=0; i<len; i++) {
                 struct json_object *o = (struct json_object*) array_list_get_idx(song_objs, i);
-                fm_song_t *song = fm_song_jing_parse_json(pl, o);
-                songs[i] = song;
-                if (song) {
-                    fm_playlist_curl_jing_config(pl, dls[i]->curl, 'm', slist, song->audio);
-                    fm_playlist_curl_jing_config(pl, dls[i+len]->curl, 'i', slist, &song->sid);
+                songs[i] = fm_song_jing_parse_json(pl, o);
+            }
+            // add the m downloaders
+            for (i=0; i<len; i++) {
+                if (songs[i] && songs[i]->audio[0] != '\0') {
+                    fm_playlist_curl_jing_config(pl, dls[used]->curl, 'm', slist, songs[i]->audio);
+                    dls[used++]->data = songs[i];
                 }
             }
-            stack_perform_until_all_done(pl->stack, dls, len * 2);
-            printf("Multi curl perform finished\n");
-            /* See how the transfers went */
+            int nmdls = used;
+            // add the i downloaders
             for (i=0; i<len; i++) {
+                if (songs[i]) {
+                    fm_playlist_curl_jing_config(pl, dls[used]->curl, 'i', slist, &songs[i]->sid);
+                    dls[used++]->data = songs[i];
+                }
+            }
+
+            printf("Jing song parser: %d of m downloaders used, %d of i downloaders used\n", nmdls, used-nmdls);
+            stack_perform_until_all_done(pl->stack, dls, used);
+            printf("Jing song parsing finished\n");
+            fm_song_t *song;
+            for (i=0; i<nmdls; i++) {
+                song = (fm_song_t *)dls[i]->data;
                 json_object *o = json_tokener_parse(dls[i]->content.mbuf->data);
                 if ((o = fm_jing_parse_json_result(o))) {
-                    strcpy(songs[i]->audio, json_object_get_string(o));
-                    printf("Successfully retrieved the audio url %s for song title: %s\n", songs[i]->audio, songs[i]->title);
+                    strcpy(song->audio, json_object_get_string(o));
+                    printf("Successfully retrieved the audio url %s for song title: %s\n", song->audio, song->title);
                 }
-                if ((o = fm_jing_parse_json_result(json_tokener_parse(dls[i+len]->content.mbuf->data)))) {
-                    songs[i]->like = *json_object_get_string(json_object_object_get(o, "lvd")) == 'l' ? 1 : 0;
-                    printf("Song title %s is liked? %d\n", songs[i]->title, songs[i]->like);
+            }
+            for (i=nmdls; i<used; i++) {
+                song = (fm_song_t *)dls[i]->data;
+                json_object *o = json_tokener_parse(dls[i]->content.mbuf->data);
+                if ((o = fm_jing_parse_json_result(json_tokener_parse(dls[i]->content.mbuf->data)))) {
+                    song->like = *json_object_get_string(json_object_object_get(o, "lvd")) == 'l' ? 1 : 0;
+                    printf("Song %s is liked? %d\n", song->title, song->like);
                 }
-                fm_playlist_push_front(base, songs[i]);
+                fm_playlist_push_front(base, song);
             }
             curl_slist_free_all(slist);
         } else {
@@ -599,24 +620,30 @@ static void fm_playlist_curl_douban_config(fm_playlist_t *pl, CURL *curl, char a
 
 // the recycle flag tells the function to reinit the states beforing proceeding
 static int song_downloader_init(fm_playlist_t *pl, downloader_t *dl, int recycle) {
-    int ret = 0;
+    int ret = -1;
     pthread_mutex_lock(&pl->mutex_current_download);
-    if (pl->current_download && *pl->current_download) {
-        if (recycle) {
-            fdownloader_config(dl);
+    if (pl->current_download) {
+        fm_song_t *s = *pl->current_download;
+        while (s && strncmp(s->audio, "http://", 7) != 0) {
+            printf("Skipped song %s with audio field %s\n", s->title, s->audio);
+            s = s->next;
         }
-        // set the url
-        printf("Setting the url %s(%s) for the song downloader %p\n", (*pl->current_download)->audio, (*pl->current_download)->title, dl);
-        curl_easy_setopt(dl->curl, CURLOPT_URL, (*pl->current_download)->audio);
-        printf("File path %s is copied to the song\n", dl->content.fbuf->filepath);
-        strcpy((*pl->current_download)->filepath, dl->content.fbuf->filepath);
-        (*pl->current_download)->downloader = dl;
-        dl->data = *pl->current_download;
-        pl->current_download = &(*pl->current_download)->next;
-    } else {
-        /*printf("Current download is NULL. Skipping\n");*/
-        ret = -1;
-    }
+        if (s) {
+            ret = 0;
+            if (recycle) {
+                fdownloader_config(dl);
+            }
+            // set the url
+            // checking for the validity of the url
+            printf("Setting the url %s(%s) for the song downloader %p\n", s->audio, s->title, dl);
+            curl_easy_setopt(dl->curl, CURLOPT_URL, s->audio);
+            printf("File path %s is copied to the song\n", dl->content.fbuf->filepath);
+            strcpy(s->filepath, dl->content.fbuf->filepath);
+            s->downloader = dl;
+            dl->data = s;
+            pl->current_download = &s->next;
+        }
+    } 
     pthread_mutex_unlock(&pl->mutex_current_download);
     return ret;
 }
@@ -718,15 +745,12 @@ static void song_downloader_all_stop(fm_playlist_t *pl)
 static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base, int clear_old, int fallback)
 {
     if (pl->mode == plLocal) {
-        // first lock and reset the download pointer
         pthread_mutex_lock(&pl->mutex_current_download);
-        pl->current_download = NULL;
-        pthread_mutex_unlock(&pl->mutex_current_download);
-        // stop all the downloaders
-        song_downloader_all_stop(pl);
         if (clear_old)
             fm_playlist_clear(pl);
-        return fm_playlist_local_dump_parse_report(pl, base);
+        int ret = fm_playlist_local_dump_parse_report(pl, base);
+        pthread_mutex_unlock(&pl->mutex_current_download);
+        return ret;
     }
 
     int (*parse_fun) (fm_playlist_t *pl, json_object *obj, fm_song_t **base);

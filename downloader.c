@@ -244,10 +244,10 @@ int stack_downloader_is_idle(downloader_stack_t *stack, downloader_t *dl)
 void stack_downloader_init(downloader_stack_t *stack, downloader_t *dl) 
 {
     printf("Downloader %p on mode %d inited and added to the stack\n", dl, dl->mode);
-    // reset the curl handle first
-    curl_multi_add_handle(stack->multi_handle, dl->curl);
     // set the idle attribute for the downloader
     dl->idle = 0;
+    // reset the curl handle first
+    curl_multi_add_handle(stack->multi_handle, dl->curl);
 }
 
 downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downloader_t **start, int length, void *data, downloader_t *(*condition)(downloader_stack_t *stack, downloader_t **start, int length, void *data))
