@@ -59,8 +59,6 @@ static int get_file_path(char *buf, char *directory, char *artist, char *title, 
         return -1;
     replace(artist, '/', '|');
     replace(title, '/', '|');
-        artist = "Unknown";
-        title = "Unknown";
     sprintf(buf, "%s/%s/%s.%s", directory, artist, title, ext);
     /*printf("The obtained file path is %s\n", buf);*/
     return 0;
