@@ -38,3 +38,28 @@ char* split(char *str, char delimiter)
     }
     return NULL;
 }
+
+char *escapech(char *buf, char c, char *str)
+{
+    int l = strlen(str) + 1;
+    // just needs to loop through and add backslash to the front
+    int i = 0, pi = 0;
+    while (i < l) {
+        char ch = str[i++];
+        if (ch == c) 
+            buf[pi++] = '\\';
+        buf[pi++] = ch;
+    }
+    return buf;
+}
+
+char *escapesh(char *buf, char *str) 
+{
+    return escapech(buf, '\'', str);
+}
+
+char *escapejson(char *buf, char *str)
+{
+    return escapech(buf, '"', str);
+}
+

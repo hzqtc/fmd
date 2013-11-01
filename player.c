@@ -1,45 +1,207 @@
 #include "player.h"
+#include "util.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <libgen.h>
+#include <unistd.h>
 
-static size_t download_callback(char *ptr, size_t size, size_t nmemb, void *userp)
+static SwrFormat get_dest_sample_fmt_from_sample_fmt(struct SwrContext **swr_ctx, SwrFormat src)
 {
-    fm_player_t *pl = (fm_player_t*) userp;
-    if (pl->status == FM_PLAYER_STOP) {
-        return 0;
+    int i, ret;
+    SwrFormat dest = src;
+    dest.sample_fmt = AV_SAMPLE_FMT_NONE;
+    struct sample_fmt_entry {
+        enum AVSampleFormat src_sample_fmt;
+        enum AVSampleFormat dest_sample_fmt;
+        int bits;
+    } sample_fmt_entries[] = {
+        { AV_SAMPLE_FMT_FLTP, AV_SAMPLE_FMT_S16, 16 },
+    };
+
+    for (i = 0; i < FF_ARRAY_ELEMS(sample_fmt_entries); i++) {
+        if (sample_fmt_entries[i].src_sample_fmt == src.sample_fmt) {
+            dest.sample_fmt = sample_fmt_entries[i].dest_sample_fmt;
+            dest.bits = sample_fmt_entries[i].bits;
+            break;
+        }
     }
-    else {
-        size_t bytes = size * nmemb;
-        pl->info.file_size += bytes;
-        mpg123_feed(pl->mh, (unsigned char*) ptr, bytes);
-        pthread_cond_signal(&pl->cond_play);
-        return bytes;
+
+    if (dest.sample_fmt == AV_SAMPLE_FMT_NONE)
+        return dest;
+
+    /* create resampler context */
+    if (!*swr_ctx) {
+        *swr_ctx = swr_alloc();
+        if (!*swr_ctx) {
+            printf("Could not allocate resampler context\n");
+            return dest;
+        }
     }
+
+    av_opt_set_int(*swr_ctx, "in_channel_layout", src.channel_layout, 0);
+    av_opt_set_int(*swr_ctx, "in_sample_rate",       src.sample_rate, 0);
+    av_opt_set_sample_fmt(*swr_ctx, "in_sample_fmt", src.sample_fmt, 0);
+
+    av_opt_set_int(*swr_ctx, "out_channel_layout",    dest.channel_layout, 0);
+    av_opt_set_int(*swr_ctx, "out_sample_rate",       dest.sample_rate, 0);
+    av_opt_set_sample_fmt(*swr_ctx, "out_sample_fmt", dest.sample_fmt, 0);
+
+    /* initialize the resampling context */
+    if ((ret = swr_init(*swr_ctx)) < 0) {
+        printf("Failed to initialize the resampling context\n");
+        return dest;
+    }
+    return dest;
 }
 
-static void* download_thread(void *data)
+static int wait_new_content(fm_player_t *pl)
 {
-    fm_player_t *pl = (fm_player_t*) data;
+    int ret = 0;
+    pthread_mutex_lock(pl->song->mutex_downloader);
+    if (pl->song->downloader) {
+        printf("Waiting for some new content to arrive\n");
+        pthread_cond_wait(&pl->song->downloader->cond_new_content, pl->song->mutex_downloader);
+        printf("Wait finished\n");
+    } else {
+        // there is no more downloader associated with this song
+        if (pl->tid_ack > 0) {
+            pthread_kill(pl->tid_ack, pl->sig_ack);
+        }
+        ret = -1;
+    }
+    pthread_mutex_unlock(pl->song->mutex_downloader);
+    return ret;
+}
 
-    curl_easy_perform(pl->curl);
-    pthread_cond_signal(&pl->cond_play);
+static int open_song(fm_player_t *pl)
+{
+    printf("Attempting to open the input\n");
+    if (avformat_open_input(&pl->format_context, pl->song->filepath, NULL, NULL) < 0) {
+        printf("Failure on opening the input stream\n");
+        return -1;
+    } else 
+        printf("Opened format input\n");
 
-    mpg123_set_filesize(pl->mh, pl->info.file_size);
-    pl->info.samples = mpg123_length(pl->mh);
+    // seek to the beginning of the file to avoid problem
+    printf("Attempting to find the stream info\n");
+    if (avformat_find_stream_info(pl->format_context, NULL) < 0) {
+        printf("Cannot find stream info\n");
+        return -1;
+    }
 
-    return pl;
+    printf("Attempting to find the best stream\n");
+    printf("Number of streams available: %d\n", pl->format_context->nb_streams);
+    pl->audio_stream_idx = av_find_best_stream(pl->format_context, AVMEDIA_TYPE_AUDIO, -1, -1, &pl->codec, 0);
+
+    if (pl->audio_stream_idx < 0) {
+        printf("Couldn't find stream information\n");
+        return -1;
+    }
+
+    // check for bitrate
+    /*printf("The estimated bitrate of the song is %d\n", pl->format_context->bit_rate);*/
+
+    // Get a pointer to the codec context for the audio stream
+    AVStream *stream = pl->format_context->streams[pl->audio_stream_idx];
+    // set the timebase
+    pl->info.time_base = stream->time_base;
+    pl->context = stream->codec;
+
+    printf("Attempting to open the codec\n");
+    if (avcodec_open2(pl->context, pl->codec, NULL) < 0) {
+        printf("Could not open codec\n");
+        return -1;
+    }
+    
+    // adjusting for resampling
+    printf("Attempting to adjusting for resampling\n");
+    pl->src_swr_format.sample_fmt = pl->context->sample_fmt;
+    pl->src_swr_format.channel_layout = pl->context->channel_layout;
+    pl->src_swr_format.sample_rate = pl->context->sample_rate;
+    pl->src_swr_format.bits = 0;
+    pl->dest_swr_format = pl->src_swr_format;
+    switch(pl->context->sample_fmt) {
+        case AV_SAMPLE_FMT_U8:         ///< unsigned 8 bits 
+        case AV_SAMPLE_FMT_S16:       ///< signed 16 bits  
+        case AV_SAMPLE_FMT_S32:       ///< signed 32 bits  
+        case AV_SAMPLE_FMT_U8P:       ///< unsigned 8 bits, planar 
+        case AV_SAMPLE_FMT_S16P:     ///< signed 16 bits, planar  
+        case AV_SAMPLE_FMT_S32P:     ///< signed 32 bits, planar  
+            pl->resampled = 0;
+            break;
+        // for float and double
+        default: 
+            pl->resampled = 1;
+            printf("Resampling needs to be done\n"); 
+            pl->dest_swr_format = get_dest_sample_fmt_from_sample_fmt(&pl->swr_context, pl->src_swr_format);
+            if (!pl->swr_context) {
+                printf("Cannot resample the data in the specified stream. Sample fmt is %d\n", pl->src_swr_format.sample_fmt);
+                return -1;
+            }
+            break;
+    }
+
+    printf("Song openning process finished.\n");
+    
+    return 0;
+}
+
+static void close_song(fm_player_t *pl)
+{
+    if (pl->context) {
+        avcodec_close(pl->context);
+        pl->context = NULL;
+    }
+    if (pl->format_context) {
+        avformat_close_input(&pl->format_context);
+        pl->format_context = NULL;
+    }
+    // close the resampling context, if any
+    if (pl->swr_context) {
+        swr_free(&pl->swr_context);
+        pl->swr_context = NULL;
+    }
+    if (pl->swr_buf) {
+        av_freep(pl->swr_buf);
+        pl->swr_buf = NULL;
+        pl->dest_swr_nb_samples = 0;
+    }
+    // close the interweave buf, if any
+    if (pl->interweave_buf) {
+        av_freep(&pl->interweave_buf);
+        pl->interweave_buf = NULL;
+        pl->interweave_buf_size = 0;
+    }
 }
 
 static void* play_thread(void *data)
 {
-    int err;
-    off_t off;
-    unsigned char* audio;
-    size_t size;
-
+    printf("Entered play thread\n");
     fm_player_t *pl = (fm_player_t*) data;
 
+    int ret;
+
+    // read the audio frames
+    int got_frame;
+
+    // interweaving
+    uint8_t *interweave_data;
+
+    // for resampling
+    int dest_nb_samples;
+
+    // final read buffer
+    char *ao_buf;
+    int ao_size;
+
+    // first conditions to satisfy (importance ordered from high to low
+    // 1. the play state is not STOP
+    // 2. the filepath is not nil
+    // 3. there is a minimum part of the file downloaded
     while (pl->status != FM_PLAYER_STOP) {
         pthread_mutex_lock(&pl->mutex_status);
         while (pl->status == FM_PLAYER_PAUSE) {
@@ -51,30 +213,103 @@ static void* play_thread(void *data)
             break;
         }
 
-        err = mpg123_decode_frame(pl->mh, &off, &audio, &size);
-        switch (err) {
-            case MPG123_OK:
-                ao_play(pl->dev, (char*) audio, size);
-                break;
-            case MPG123_NEED_MORE:
-                if (pthread_kill(pl->tid_dl, 0) == 0) {
-                    pthread_mutex_lock(&pl->mutex_status);
-                    pthread_cond_wait(&pl->cond_play, &pl->mutex_status);
-                    pthread_mutex_unlock(&pl->mutex_status);
-                }
-                else {
-                    if (pl->tid_ack > 0) {
-                        pthread_kill(pl->tid_ack, pl->sig_ack);
-                    }
-                    return pl;
-                }
-                break;
-            case MPG123_NEW_FORMAT:
-                break;
-            default:
-                fprintf(stderr, "mpg123 deocde return: %d\n", err);
-                break;
+        if (pl->song->filepath[0] == '\0') {
+            /*printf("Blocking on waiting for filepath being assigned\n");*/
+            continue;
         }
+
+        if (!pl->context) {
+            // wait for the file to grow at least to a considerable size
+            struct stat st;
+            stat(pl->song->filepath, &st);
+            if (st.st_size < HEADERBUF_SIZE) {
+                printf("Blocking on waiting for the file to have some initial size\n");
+                if (wait_new_content(pl) == 0) continue;
+                else return pl;
+            } else if (open_song(pl) != 0) {
+                printf("Opening song failed. Retry again.\n");
+                close_song(pl);
+                // we should wait as well, since the natural reason for not able to open the song should be not enough data
+                if (wait_new_content(pl) == 0) continue;
+                else return pl;
+            }
+        }
+
+        // decode the frame
+        /*printf("Attempting to read the frame\n");*/
+        if ((ret = av_read_frame(pl->format_context, &pl->avpkt)) < 0) {
+            // free the packet first
+            av_free_packet(&pl->avpkt);
+            // couldn't decode the frame
+            printf("Could not read the frame\n");
+            if (wait_new_content(pl) == 0) continue;
+            else return pl;
+        }
+        if (pl->avpkt.stream_index == pl->audio_stream_idx) {
+            avcodec_get_frame_defaults(pl->frame);
+            /*printf("Attempting to decode the music\n");*/
+            ret = avcodec_decode_audio4(pl->context, pl->frame, &got_frame, &pl->avpkt);
+            if (ret < 0) {
+                printf("Error decoding audio\n");
+            } else if (got_frame) {
+                /*printf("Got frame to play\n");*/
+                ao_size = av_samples_get_buffer_size(NULL, pl->frame->channels, pl->frame->nb_samples, pl->frame->format, 1);
+                ao_buf = (char *) pl->frame->extended_data[0];
+
+                // first resample the buffer if necessary 
+                if (pl->resampled) {
+                    dest_nb_samples = av_rescale_rnd(swr_get_delay(pl->swr_context, pl->src_swr_format.sample_rate) + pl->frame->nb_samples, pl->src_swr_format.sample_rate, pl->src_swr_format.sample_rate, AV_ROUND_UP);
+                    if (dest_nb_samples > pl->dest_swr_nb_samples) {
+                        printf("dest_nb_samples %d exceeding current nb %d. Reallocating the resampling buffer\n", dest_nb_samples, pl->dest_swr_nb_samples);
+                        if (pl->swr_buf)
+                            av_freep(pl->swr_buf);
+                        if (av_samples_alloc_array_and_samples(&pl->swr_buf, pl->frame->linesize, pl->frame->channels, dest_nb_samples, pl->dest_swr_format.sample_fmt, 0) < 0) {
+                            printf("Could not allocate destination samples\n");
+                            exit(-1);
+                        }
+                        pl->dest_swr_nb_samples = dest_nb_samples;
+                    }
+                    // covert to destination format
+                    ret = swr_convert(pl->swr_context, pl->swr_buf, dest_nb_samples, (const uint8_t **) pl->frame->extended_data, pl->frame->nb_samples);
+                    if (ret < 0) {
+                        printf("Could not resample the audio\n");
+                        exit(-1);
+                    } 
+                    // get the resampled buffer size
+                    ao_buf = (char *) *pl->swr_buf;
+                    ao_size = av_samples_get_buffer_size(pl->frame->linesize, pl->frame->channels, ret, pl->dest_swr_format.sample_fmt, 1);
+                }
+                // copying the frame
+                if (av_sample_fmt_is_planar(pl->dest_swr_format.sample_fmt) && pl->frame->channels > 1) {
+                    unsigned sample_size = av_get_bytes_per_sample(pl->dest_swr_format.sample_fmt);
+                    // printf("Copying multiple channels\n");
+                    if(pl->interweave_buf_size < ao_size) {
+                        printf("buf size %d exceeding current interweave buf size %d. Reallocating the interweave buffer\n", ao_size, pl->interweave_buf_size);
+                        if (pl->interweave_buf)
+                            av_freep(&pl->interweave_buf);
+                        pl->interweave_buf = av_malloc(ao_size);
+                        if (!pl->interweave_buf) {
+                            // Not enough memory - shouldn't happen 
+                            printf("Unable to allocate the buffer\n");
+                        }
+                        pl->interweave_buf_size = ao_size;
+                    }
+                    interweave_data = pl->interweave_buf;
+                    unsigned f, channel;
+                    for (f = 0; f < pl->frame->nb_samples; ++f) {
+                        for (channel = 0; channel < pl->frame->channels; ++channel) {
+                            memcpy(interweave_data, pl->frame->extended_data[channel] + f * sample_size, sample_size);
+                            interweave_data += sample_size;
+                        }
+                    }
+                    ao_buf = (char *) pl->interweave_buf;
+                }
+                ao_play(pl->dev, ao_buf, ao_size);
+                // add the duration to the info
+                pl->info.duration += pl->avpkt.duration;
+            }
+        }
+        av_free_packet(&pl->avpkt);
     }
 
     return pl;
@@ -84,14 +319,11 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
 {
     pl->config = *config;
 
-    pl->mh = mpg123_new(NULL, NULL);
-    mpg123_format_none(pl->mh);
-    mpg123_format(pl->mh, config->rate, config->channels, config->encoding);
-
     ao_sample_format ao_fmt;
     ao_fmt.rate = config->rate;
     ao_fmt.channels = config->channels;
-    ao_fmt.bits = mpg123_encsize(config->encoding) * 8;
+    // setting the bit rate to 16 for the time being
+    ao_fmt.bits = 16;
     ao_fmt.byte_format = AO_FMT_NATIVE;
     ao_fmt.matrix = 0;
 
@@ -112,10 +344,6 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
     if (pl->dev == NULL)
         return -1;
 
-    pl->curl = curl_easy_init();
-    curl_easy_setopt(pl->curl, CURLOPT_WRITEFUNCTION, download_callback);
-    curl_easy_setopt(pl->curl, CURLOPT_WRITEDATA, pl);
-
     pl->tid_ack = 0;
 
     pthread_mutex_init(&pl->mutex_status, NULL);
@@ -123,30 +351,59 @@ int fm_player_open(fm_player_t *pl, fm_player_config_t *config)
 
     pl->status = FM_PLAYER_STOP;
 
+    pl->song = NULL;
+    pl->context = NULL;
+    pl->format_context = NULL;
+    pl->codec = NULL;
+    pl->audio_stream_idx = 0;
+
+    // intialize the av frame
+    pl->frame = av_frame_alloc();
+
+    // interweave buffer setting
+    pl->interweave_buf = NULL;
+    pl->interweave_buf_size = 0;
+
+    // swr settings
+    pl->resampled = 0;
+    pl->swr_context = NULL;
+    pl->swr_buf = NULL;
+    pl->dest_swr_nb_samples = 0;
+
     return 0;
 }
 
 void fm_player_close(fm_player_t *pl)
 {
-    if (pl->status != FM_PLAYER_STOP) {
-        fm_player_stop(pl);
-    }
+    fm_player_stop(pl);
 
     ao_close(pl->dev);
-    mpg123_delete(pl->mh);
-    curl_easy_cleanup(pl->curl);
 
     pthread_mutex_destroy(&pl->mutex_status);
     pthread_cond_destroy(&pl->cond_play);
+
+    // free the ffmpeg stuff
+    av_frame_free(&pl->frame);
 }
 
-void fm_player_set_url(fm_player_t *pl, const char *url)
+int fm_player_set_song(fm_player_t *pl, fm_song_t *song)
 {
-    printf("Player set url: %s\n", url);
-    if (pl->status != FM_PLAYER_STOP) {
-        fm_player_stop(pl);
+    fm_player_stop(pl);
+
+    if (!song) {
+        printf("No song to play\n");
+        return -1;
     }
-    curl_easy_setopt(pl->curl, CURLOPT_URL, url);
+
+    // set the song
+    pl->song = song;
+
+    // set the relevant properties
+    pl->info.duration = 0;
+    pl->info.time_base.num = pl->info.time_base.den = 1;
+    pl->info.length = song->length;
+
+    return 0;
 }
 
 void fm_player_set_ack(fm_player_t *pl, pthread_t tid, int sig)
@@ -157,24 +414,22 @@ void fm_player_set_ack(fm_player_t *pl, pthread_t tid, int sig)
 
 int fm_player_pos(fm_player_t *pl)
 {
-    return mpg123_tell(pl->mh) / pl->config.rate;
+    return pl->info.duration * pl->info.time_base.num / pl->info.time_base.den;
 }
 
 int fm_player_length(fm_player_t *pl)
 {
-    return pl->info.samples / pl->config.rate;
+    return pl->info.length;
 }
 
 void fm_player_play(fm_player_t *pl)
 {
     printf("Player play\n");
     if (pl->status == FM_PLAYER_STOP) {
-        mpg123_open_feed(pl->mh);
         pl->status = FM_PLAYER_PLAY;
-        pl->info.file_size = 0;
-        pl->info.samples = 0;
-        pthread_create(&pl->tid_dl, NULL, download_thread, pl);
+        printf("Creating play thread\n");
         pthread_create(&pl->tid_play, NULL, play_thread, pl);
+        printf("Finished creating play thread\n");
     }
     else if (pl->status == FM_PLAYER_PAUSE) {
         pthread_mutex_lock(&pl->mutex_status);
@@ -194,27 +449,31 @@ void fm_player_pause(fm_player_t *pl)
 
 void fm_player_stop(fm_player_t *pl)
 {
-    printf("Player stop\n");
     if (pl->status != FM_PLAYER_STOP) {
+        printf("Player stop\n");
         pthread_mutex_lock(&pl->mutex_status);
         pl->status = FM_PLAYER_STOP;
         pthread_mutex_unlock(&pl->mutex_status);
         pthread_cond_signal(&pl->cond_play);
+        printf("Trying to signal cond new content\n");
+        if (pl->song && pl->song->downloader)
+            pthread_cond_signal(&pl->song->downloader->cond_new_content);
 
-        pthread_join(pl->tid_dl, NULL);
         pthread_join(pl->tid_play, NULL);
-        mpg123_close(pl->mh);
+
+        close_song(pl);
+        pl->song = NULL;
     }
 }
 
 void fm_player_init()
 {
     ao_initialize();
-    mpg123_init();
+    avcodec_register_all();
+    av_register_all();
 }
 
 void fm_player_exit()
 {
-    mpg123_exit();
     ao_shutdown();
 }

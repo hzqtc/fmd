@@ -1,155 +1,88 @@
-# FMD (Douban FM Daemon)
+# FMD (Internet Radio Service Daemon)
 
-FMD stands for Douban FM Daemon, inspired by MPD (Music Player Daemon). FMD plays music from Douban FM in background and communicate with clients through TCP connections.
+This is a fork from the original [FMD](https://github.com/hzqtc/fmd). The aim of this fork is to provide more advanced features.
 
-## Config
+## Architectural differences
 
-The main config file is `~/.fmd/fmd.conf`. Config file includes several sections.
+### Decoder
 
-In `DoubanFM` section, there are the following config items:
+This version of `fmd` uses `ffmpeg` instead of `mpg123` to decode music. The rational is to support more audio formats e.g. `m4a`.
 
-    channel [int]       # Douban FM Channel id
-    uid     [int]       # Douban FM user id
-    uname   [string]    # Douban FM user name
-    token   [string]    # Douban FM authorization token
-    expire  [int]       # token expire time
-    kbps    [string]    # Prefered bitrate (only affect pro users)
+### Network transfer
 
-`kbps` is default to ` ` (empty), [pro users](http://douban.fm/upgrade) can set
-it to `192` to get a better music quality. For non-pro users, any value would be
-ignored and the mp3 bitrate is `64`.
+Improving on the original model, this version uses a multi-threaded downloading framework to pull content from network. At any time when streaming music from an online service, multiple instances of `curl` keep running and caching songs until the queue becomes empty (the default number of song downloaders is 2 but you can change that number in the source file).
 
-To get a complete channel list, try:
+A negativity here is that when the program first starts pulling songs it's relatively slow, since the additional downloaders will take away bandwidth for the first song. However, this will be subsequently complemented by smoother music playing in all following songs. (Or you can simply change the number of assigned song downloaders to 1 to avoid this problem)
 
-    wget -q -O - "http://www.douban.com/j/app/radio/channels" | json_pp
+## More services available
 
-To get your own `uid`, `uname`, `token` and `expire`, try:
+In addition to the original Douban services, two other types of services are added:
 
-    wget -q -O - --post-data="email=[email]&password=[passwd]&app_name=radio_desktop_win&version=100" "http://www.douban.com/j/app/login"
+### <a id="local"></a>Local music channel / Red-Heart channel
 
-Replace `[email]` and `[passwd]` with your douban account and password.
+#### Configuration
 
-In `Output` section, there are the following config items:
+To configure the local music channel simply put this in your `fmd.conf`
 
-    driver  [string]    # audio output driver, default is "alsa"
-    device  [string]    # audio output device, can be omitted
-    rate    [int]       # audio ouput rate, default to 44100
+    [Local]
+    music_dir = {default value: ~/Music}
 
-As FMD uses [libao](http://xiph.org/ao) for audio output, users may found it useful to refer to [libao's driver document](http://www.xiph.org/ao/doc/drivers.html) when deciding which driver to use. For example, users of PulseAudio should change the `Output` section to:
+The local channel comes with id `999` and if you also use my fork of [FMC](https://github.com/lynnard/fmc), it will display the channel name as the name of the current login user. All files of mimetype `audio/*` within the `music_dir` are added randomly to the playlist.
 
-    [Output]
-    driver = pulse
-    device = 0
-    rate = 44100
+You also need to make sure you have installed `mutagen` (for parsing the music tags) and downloaded my frontend [client](mutagen).
 
-And for Mac users:
+#### Like
 
-    [Output]
-    driver = macosx
-    device =
-    rate = 44100
+By default all music is `liked`. If you unrate a song, the action would be the same as `ban`.
 
-In `Server` section, there are the following config items:
+#### Ban
 
-    address [string]    # server listen address, default to "localhost"
-    port    [string]    # server listen port, default to "10098"
+The song will be removed from your disk. In addition, if it's enclosed in some directory that becomes empty, that directory is removed as well.
 
-Please create a config file before using FMD. A sample config file is:
+The local music channel is also the fall-back channel if network becomes unavailable i.e. when `fmd` is unable to retrieve any playlists from online channels.
 
-    [DoubanFM]
-    channel = 0
-    uid = 123456
-    uname = username
-    token = 1234abcd
-    expire = 1345000000
-    kbps =
+Aside from these things the local channel is almost identical to any online channel.
 
-    [Output]
-    driver = alsa
-    device = default
-    rate = 44100
+## Jing.fm
 
-    [Server]
-    address = localhost
-    port = 10098
+#### Configuration
 
-## Commands
+You need to first have a [Jing.fm](http://jing.fm) account. Then run this line at the command line, replacing `<email>` and `<password>` accordingly.
 
-The communication between FMD and clients go throught TCP connection.
+    $ curl -i -d'email=<email>' -d'pwd=<password>' 'http://jing.fm/api/v1/sessions/create'
 
-Commands client can send are `play`, `stop`, `pause`, `toggle`, `skip`, `ban`, `rate`, `unrate`, `info`, `channels`, `setch` and `end`.
+Copy down your userid (buried inside the JSON response `result.usr.id`), Jing-A-Token-Header and Jing-R-Token-Header and put them into your `fmd.conf`
 
-* `play`: start playing
-* `stop`: stop playing, and set play position to 0:00
-* `pause`: stop playing
-* `toggle`: toggle between playing and pause
-* `skip`: skip current song
-* `ban`: mark current song as "dislike"
-* `rate`: mark current song as "like"
-* `unrate`: unmark current song
-* `info`: simply get FMD info
-* `channels`: list available channels
-* `setch`: change channel on the fly
-* `end`: tell FMD to exit
+    [JingFM]
+    atoken = <Jing-A-Token-Header>
+    rtoken = <Jing-R-Token-Header>
+    uid = <uid>
 
-**Note**: The recommand way to exit FMD is `killall fmd`. Because the `end` command must be sent from the client and will left the FMD port in wait-close for several minutes, during which time new FMD instance cannot bind to the port.
+#### Channels
 
-## Protocol
+To start a Jing.fm channel, simply use the old command `setch <string>`. While any integer value will be interpreted as a Douban channel, all other strings will be seen as queries into Jing.fm. For example:
 
-FMD responses to all commands except `end`, the reponse is a json string containing current FMD infomation.
+    fmc setch '周杰伦'
 
-    {
-       "len" : 0,
-       "sid" : 967698,
-       "status" : "play",
-       "channel" : 0,
-       "like" : 0,
-       "artist" : "花儿乐队",
-       "album" : "幸福的旁边",
-       "cover" : "http://img1.douban.com/mpic/s4433542.jpg",
-       "url" : "/subject/1404476/",
-       "user" : "小强",
-       "pos" : 5,
-       "title" : "别骗我",
-       "year" : 1999
-    }
+will start a new Jing.fm channel on 周杰伦.
 
-The simplest FMD client is telnet:
+#### Like & Ban
 
-    telnet localhost 10098
-    Trying ::1...
-    Connection failed: Connection refused
-    Trying 127.0.0.1...
-    Connected to localhost.
-    Escape character is '^]'.
-    info
-    {"status":"play","channel":0,"user":"小强","title":"What's My Name (Intro #1)","artist":"Rihanna / Drake", "album":"Promo Only Rhythm...","year":2010,"cover":"http://img1.douban.com/mpic/s4615061.jpg","url":"/subject/5951920/","sid":1561924,"like":0,"pos":107,"len":254}
-    toggle
-    {"status":"pause","channel":0,"user":"小强","title":"What's My Name (Intro #1)","artist":"Rihanna / Drake", "album":"Promo Only Rhythm...","year":2010,"cover":"http://img1.douban.com/mpic/s4615061.jpg","url":"/subject/5951920/","sid":1561924,"like":0,"pos":111,"len":254}
-    toggle
-    {"status":"play","channel":0,"user":"小强","title":"What's My Name (Intro #1)","artist":"Rihanna / Drake", "album":"Promo Only Rhythm...","year":2010,"cover":"http://img1.douban.com/mpic/s4615061.jpg","url":"/subject/5951920/","sid":1561924,"like":0,"pos":111,"len":254}
-    help
-    {"status":"error","message":"wrong command: help"}
+These actions are identical to those used with Douban channels from the user point of view. But of course now the data is sent to jing.fm instead.
 
-[FMC](https://github.com/hzqtc/fmc) is a command line client for FMD.
+## More fine-grained infomation
 
-## Build
+The `info` command will now also give back the `kbps` rate of the current song. This can be different depending on each song.
 
-FMD is written in C and depends on `libcurl` (for api calls and music downloading), `json-c` (for API parsing), `mpg123` (for music decoding) and `libao` (for music playing).
+## More commands
 
-Currently, there is no binary distribution for this project. So compile from source is the only option. FMD has been tested on Linux and Mac OS X 10.7.
+A few more commands are added in this fork. They include
 
-    git clone https://github.com/hzqtc/fmd.git
-    cd fmd
-    make release
+* `kbps <bitrate>`: on-the-fly switching of music quality
+* `webpage`: opens the douban music page for the current song using the browser specified in the shell variable `$BROWSER`; if the page url is not available e.g. for Jing.fm channels, it will open the search page on douban music
 
-## Utilities for Linux
+## Music Caching
 
-To generate you configure file automaticly, change your douban account & password in `fmd-update-conf.sh`, then:
+All played and liked songs will be saved to `music_dir` (as specified in the [Local](#local) section) in `artist/title.<ext>` format. The ID3 tags (for `m4a`, iTunes-style tags) will be saved along as well. The cover image, when downloadable, will be downloaded and embedded into the song.
 
-    mkdir -p ~/.fmd
-    ./fmd-update-conf.sh > ~/.fmd/fmd.conf
-
-Even more, to run fmd on boot in Ubuntu (and some other Linux distribution with init.d), run as root:
-
-    ./install-ubuntu-service.sh
+Again, to make sure all the tags work you need to install `mutagen` and download my [frontend](mutagen).
