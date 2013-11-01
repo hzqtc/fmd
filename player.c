@@ -229,7 +229,9 @@ static void* play_thread(void *data)
             } else if (open_song(pl) != 0) {
                 printf("Opening song failed. Retry again.\n");
                 close_song(pl);
-                continue;
+                // we should wait as well, since the natural reason for not able to open the song should be not enough data
+                if (wait_new_content(pl) == 0) continue;
+                else return pl;
             }
         }
 

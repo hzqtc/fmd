@@ -184,16 +184,6 @@ void stack_add_downloader(downloader_stack_t *stack, downloader_t *d)
     stack->downloaders[stack->size++] = d;
 }
 
-void stack_downloader_lock(downloader_stack_t *stack, downloader_t *d)
-{
-    d->locked = 1;
-}
-
-void stack_downloader_unlock(downloader_stack_t *stack, downloader_t *d)
-{
-    d->locked = 0;
-}
-
 downloader_stack_t *stack_init()
 {
     downloader_stack_t *stack = (downloader_stack_t *) malloc(sizeof(downloader_stack_t));
@@ -201,6 +191,9 @@ downloader_stack_t *stack_init()
     stack->size = 0;
     stack->downloaders = (downloader_t **) malloc(DEFAULT_N_DOWNLOADERS * sizeof(downloader_t *));
     stack->multi_handle = curl_multi_init();
+    pthread_mutex_init(&stack->mutex_op, NULL);
+    pthread_mutex_init(&stack->mutex_elem, NULL);
+    pthread_mutex_init(&stack->mutex_cond, NULL);
     int i;
     for (i=0; i<DEFAULT_N_DOWNLOADERS; i++) {
         stack_add_downloader(stack, downloader_init());
@@ -210,6 +203,7 @@ downloader_stack_t *stack_init()
 
 void stack_downloader_stop(downloader_stack_t *stack, downloader_t *d)
 {
+    pthread_mutex_lock(&stack->mutex_elem);
     if (!d->idle) {
         printf("Downloader %p stopped and marked to idle\n", d);
         d->idle = 1;
@@ -222,6 +216,7 @@ void stack_downloader_stop(downloader_stack_t *stack, downloader_t *d)
         // reset the curl instance
         downloader_curl_reset(d);
     }
+    pthread_mutex_unlock(&stack->mutex_elem);
 }
 
 void stack_mark_idle_downloaders(downloader_stack_t *stack)
@@ -237,19 +232,22 @@ void stack_mark_idle_downloaders(downloader_stack_t *stack)
     }
 }
 
-int stack_downloader_is_idle(downloader_stack_t *stack, downloader_t *dl)
-{
-    stack_mark_idle_downloaders(stack);
-    return dl->idle;
-}
-
 void stack_downloader_init(downloader_stack_t *stack, downloader_t *dl) 
 {
+    pthread_mutex_lock(&stack->mutex_elem);
     printf("Downloader %p on mode %d inited and added to the stack\n", dl, dl->mode);
     // set the idle attribute for the downloader
     dl->idle = 0;
     // reset the curl handle first
     curl_multi_add_handle(stack->multi_handle, dl->curl);
+    pthread_mutex_unlock(&stack->mutex_elem);
+}
+
+static void downloader_unlock_all(downloader_t **start, int length) {
+    int i;
+    for (i=0; i<length; i++) {
+        start[i]->locked = 0;
+    }
 }
 
 downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downloader_t **start, int length, void *data, downloader_t *(*condition)(downloader_stack_t *stack, downloader_t **start, int length, void *data))
@@ -262,18 +260,24 @@ downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downl
         stack_downloader_init(stack, start[i]);
     }
 
+    pthread_mutex_lock(&stack->mutex_op);
     /* we start some action by calling perform right away */
     printf("Trying with initial perform for multi-handle %p\n", stack->multi_handle);
     while ( curl_multi_perform(stack->multi_handle, &still_running) == CURLM_CALL_MULTI_PERFORM );
     printf("Initial perform finished\n");
+    pthread_mutex_unlock(&stack->mutex_op);
+
+    pthread_mutex_lock(&stack->mutex_cond);
+    ret = condition(stack, start, length, data);
+    pthread_mutex_unlock(&stack->mutex_cond);
+
+    if (ret) {
+        downloader_unlock_all(start, length);
+        return ret;
+    }
 
     do {
-        /*printf("Marking the idle downloaders\n");*/
-        stack_mark_idle_downloaders(stack);
-
-        /*printf("Testing the condition\n");*/
-        if ((ret = condition(stack, start, length, data)))
-            return ret;
+        pthread_mutex_lock(&stack->mutex_op);
 
         struct timeval timeout;
         int rc; /* select() return code */
@@ -318,10 +322,26 @@ downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downl
                 curl_multi_perform(stack->multi_handle, &still_running);
                 break;
         }
+        /*printf("Marking the idle downloaders\n");*/
+        stack_mark_idle_downloaders(stack);
+
+        pthread_mutex_unlock(&stack->mutex_op);
+
+        /*printf("Testing the condition\n");*/
+        // testing the condition using another lock
+        pthread_mutex_lock(&stack->mutex_cond);
+        ret = condition(stack, start, length, data);
+        pthread_mutex_unlock(&stack->mutex_cond);
+
+        if (ret) {
+            downloader_unlock_all(start, length);
+            return ret;
+        }
+
     } while (still_running);
-    // still running turns false; so we should just mark and check again
-    stack_mark_idle_downloaders(stack);
-    return condition(stack, start, length, data);
+    // still running turns false
+    downloader_unlock_all(start, length);
+    return ret;
 }
 
 downloader_t *stack_downloader_any_done(downloader_stack_t *stack, downloader_t **start, int length, void *data)
@@ -372,6 +392,7 @@ int stack_perform_until_done(downloader_stack_t *stack, downloader_t *downloader
 // this method has to be mutex protected (imagine two threads trying to obtain downloaders at the same time, and both of them then might get hold of the same downloader (and dangerously initiate on that handle at the same time)
 void stack_get_idle_downloaders(downloader_stack_t *stack, downloader_t **start, int length, enum downloader_mode mode)
 {
+    pthread_mutex_lock(&stack->mutex_op);
     stack_mark_idle_downloaders(stack);
     int i, n = 0;
     enum downloader_buffer_type preferred_btype = bNone;
@@ -406,7 +427,10 @@ void stack_get_idle_downloaders(downloader_stack_t *stack, downloader_t **start,
     // configure all the downloaders to be returned
     for (i=0; i < length; i++) {
         downloader_config_mode(start[i], mode);
+        // lock the downloaders so that they cannot be used by subsequent get_idle_downloaders call
+        start[i]->locked = 1;
     }
+    pthread_mutex_unlock(&stack->mutex_op);
 }
 
 downloader_t *stack_get_idle_downloader(downloader_stack_t *stack, enum downloader_mode mode)
@@ -424,5 +448,8 @@ void stack_free(downloader_stack_t *stack)
     }
     free(stack->downloaders);
     curl_multi_cleanup(stack->multi_handle);
+    pthread_mutex_destroy(&stack->mutex_op);
+    pthread_mutex_destroy(&stack->mutex_elem);
+    pthread_mutex_destroy(&stack->mutex_cond);
     free(stack);
 }

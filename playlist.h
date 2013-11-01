@@ -91,7 +91,6 @@ typedef struct {
     // holding a reference to the stop function; needs to be provided by the delegate
     void (*fm_player_stop)();
     //// song download section
-    downloader_t *song_downloaders[N_SONG_DOWNLOADERS];
     // a flag telling the song download thread to stop download
     int song_download_stop;
     pthread_t tid_download;

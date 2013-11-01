@@ -58,6 +58,9 @@ typedef struct {
     int total_size;
     downloader_t **downloaders;
     CURL *multi_handle;
+    pthread_mutex_t mutex_op;
+    pthread_mutex_t mutex_elem;
+    pthread_mutex_t mutex_cond;
 } downloader_stack_t;
 
 downloader_stack_t *stack_init();
@@ -71,13 +74,8 @@ void stack_downloader_stop(downloader_stack_t *stack, downloader_t *dl);
 // this function will be automatically called in any perform function; however if you are manipulating the handles inside the 
 // perform function, this should be used to reinitialize the downloader
 void stack_downloader_init(downloader_stack_t *stack, downloader_t *dl);
-// this is used to 'reserve' the given downloader. useful in a multi-threaded environment where you want to make sure that the downloaders don't get stolen by other threads
-void stack_downloader_lock(downloader_stack_t *stack, downloader_t *d);
-void stack_downloader_unlock(downloader_stack_t *stack, downloader_t *d);
 int stack_perform_until_all_done(downloader_stack_t *stack, downloader_t **start, int length);
 int stack_perform_until_done(downloader_stack_t *stack, downloader_t *downloader);
-void stack_mark_idle_downloaders(downloader_stack_t *stack);
-int stack_downloader_is_idle(downloader_stack_t *stack, downloader_t *dl);
 void stack_get_idle_downloaders(downloader_stack_t *stack, downloader_t **start, int length, enum downloader_mode mode);;
 downloader_t *stack_get_idle_downloader(downloader_stack_t *stack, enum downloader_mode mode);
 void stack_free(downloader_stack_t *stack);
