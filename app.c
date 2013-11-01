@@ -152,31 +152,40 @@ void app_client_handler(void *ptr, char *input, char *output)
                 }
                 get_fm_info(app, output);
             }
+        } else {
+            sprintf(output, "{\"status\":\"error\",\"message\":\"Current channel does not support bitrate switch: %s\"}", input);
         }
     }
-    else if(strcmp(cmd, "website") == 0) {
+    // allowing an additional argument to be specified as the browser
+    else if(strcmp(cmd, "webpage") == 0) {
         switch (app->player.status) {
             case FM_PLAYER_PLAY:
             case FM_PLAYER_PAUSE: {
-                char sh[256];
-                char url[128];
+                char sh[1024];
+                // the url can become rather long after escaping
+                char url[896];
                 fm_song_t *current = fm_playlist_current(&app->playlist);
                 if (escapesh(url, current->url)[0] == '\0') {
                     // we need to make a custom url to open
                     sprintf(url, "%s %s", current->artist, current->title);
                     // first obtain a curl instance to escape the query
                     downloader_t *d = stack_get_idle_downloader(app->playlist.stack, dAny);
-                    char *arg = curl_easy_escape(d->curl, url, 0);
-                    sprintf(url, "http://music.douban.com/subject_search?search_text=%s&cat=1003", arg);
-                    curl_free(arg);
+                    char *st = curl_easy_escape(d->curl, url, 0);
+                    sprintf(url, "http://music.douban.com/subject_search?search_text=%s&cat=1003", st);
+                    curl_free(st);
                 }
-                sprintf(sh, "$BROWSER $'%s' &", url);
+                printf("url is %s\n", url);
+                sprintf(sh, "%s $'%s' &", arg ? arg : "$BROWSER", url);
+                printf("cmd is %s\n", sh);
                 system(sh);
+                get_fm_info(app, output);
                 break;
             }
             default:
                 sprintf(output, "{\"status\":\"error\",\"message\":\"Page information not available\"}");
         }
+    } else {
+        sprintf(output, "{\"status\":\"error\",\"message\":\"Wrong command: %s\"}", input);
     }
 }
 

@@ -15,6 +15,8 @@ static void downloader_curl_reset(downloader_t *dl)
     curl_easy_reset(dl->curl);
     curl_easy_setopt(dl->curl, CURLOPT_PRIVATE, dl);
     curl_easy_setopt(dl->curl, CURLOPT_WRITEDATA, dl);
+    // set a default timeout; otherwise it can be too much delay
+    curl_easy_setopt(dl->curl, CURLOPT_CONNECTTIMEOUT, 10);
 }
 
 // init the downloader by setting all the relevant fields
@@ -367,6 +369,7 @@ int stack_perform_until_done(downloader_stack_t *stack, downloader_t *downloader
 // 1. idle downloader with the preferred mode
 // 2. idle downloader
 // 3. newly allocated downloader
+// this method has to be mutex protected (imagine two threads trying to obtain downloaders at the same time, and both of them then might get hold of the same downloader (and dangerously initiate on that handle at the same time)
 void stack_get_idle_downloaders(downloader_stack_t *stack, downloader_t **start, int length, enum downloader_mode mode)
 {
     stack_mark_idle_downloaders(stack);

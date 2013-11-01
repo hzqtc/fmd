@@ -519,7 +519,7 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **ba
     sprintf(buf,
             "IFS='\n';"
             "args=($(find $'%s' -type f -mmin +2 -print0 | xargs -0 file -iF'\t' | fgrep audio | cut -d'\t' -f1 | shuf | head -n '%d'));"
-            "mutagen -f '{title}\n{artist}\n{wors}\n{album}\n{year}\n{kbps}\n{path}\n{len}' \"${args[@]}\";"
+            "mutagen -f '{path}\n{title}\n{artist}\n{wors}\n{album}\n{year}\n{kbps}\n{len}' \"${args[@]}\";"
             , pl->config.music_dir, N_LOCAL_CHANNEL_FETCH);
     printf("Local channel refilling command is: %s\n", buf);
     // the field reference counter
@@ -539,8 +539,14 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **ba
                 // append the 0 at the end
                 lastf[len] = '\0';
                 switch (fn) {
-                    case 4: song->pubdate = atoi(lastf); break;
-                    case 6: {
+                    case 0: {
+                        // if path is nil then we should break out
+                        if (lastf[0] == '\0') {
+                            if (song)
+                                fm_song_free(pl, song);
+                            printf("Empty path field for song. Stopped parsing\n");
+                            return -1;
+                        }
                         // ext is the ext given in the filepath
                         char *p = lastf;
                         int exti = -1;
@@ -559,6 +565,7 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **ba
                         printf("Obtained extension: %s\n", song->ext);
                         break;
                     }
+                    case 5: song->pubdate = atoi(lastf); break;
                     case 7: song->length = atoi(lastf); break;
                     default: break;
                 }
@@ -575,13 +582,13 @@ static int fm_playlist_local_dump_parse_report(fm_playlist_t *pl, fm_song_t **ba
             fn = (fn+1) % fl;
             // set up the last field
             switch(fn) {
-                case 0: lastf = song->title; size = sizeof(song->title); break;
-                case 1: lastf = song->artist; size = sizeof(song->artist); break;
-                case 2: lastf = song->url; size = sizeof(song->url); break;
-                case 3: lastf = song->album; size = sizeof(song->album); break;
-                case 4: lastf = buf; size = sizeof(buf); break;
-                case 5: lastf = song->kbps; size = sizeof(song->kbps); break;
-                case 6: lastf = song->filepath; size = sizeof(song->filepath); break;
+                case 0: lastf = song->filepath; size = sizeof(song->filepath); break;
+                case 1: lastf = song->title; size = sizeof(song->title); break;
+                case 2: lastf = song->artist; size = sizeof(song->artist); break;
+                case 3: lastf = song->url; size = sizeof(song->url); break;
+                case 4: lastf = song->album; size = sizeof(song->album); break;
+                case 5: lastf = buf; size = sizeof(buf); break;
+                case 6: lastf = song->kbps; size = sizeof(song->kbps); break;
                 case 7: lastf = buf; size = sizeof(buf); break;
             }
             len = 0;
@@ -754,10 +761,12 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base
 
     int (*parse_fun) (fm_playlist_t *pl, json_object *obj, fm_song_t **base);
     downloader_t *dl = stack_get_idle_downloader(pl->stack, base ? dMem : dDrop);
+    printf("### Downloader obtained for playlist retrieval is %p\n", dl);
     switch (pl->mode) {
         case plDouban: // we should first request the downloader; obtain the curl handle and then 
             fm_playlist_curl_douban_config(pl, dl->curl, act);
             stack_perform_until_done(pl->stack, dl);
+            printf("### Downloader finished is %p; idle %d\n", dl, dl->idle);
             parse_fun = fm_playlist_douban_parse_json;
             break;
         case plJing: {
@@ -766,6 +775,7 @@ static int fm_playlist_send_report(fm_playlist_t *pl, char act, fm_song_t **base
             // the jing config shouldn't involve any data for the playlist. Otherwise there's some error
             fm_playlist_curl_jing_config(pl, dl->curl, act, slist, NULL);
             stack_perform_until_done(pl->stack, dl);
+            printf("### Downloader finished is %p; idle %d\n", dl, dl->idle);
             curl_slist_free_all(slist);
             parse_fun = fm_playlist_jing_parse_json;
             break;

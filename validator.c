@@ -72,7 +72,8 @@ int validate(validator_t *validator, char *filepath)
             return stat(filepath, &sts) == 0 && validator->data.filesize - sts.st_size < FILESIZE_MARGIN;
         }
         default:
-            return 0;
+            // no validator means doesn't need to validate -> always true
+            return 1;
     }
 }
 

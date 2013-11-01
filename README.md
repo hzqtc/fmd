@@ -79,7 +79,7 @@ The `info` command will now also give back the `kbps` rate of the current song. 
 A few more commands are added in this fork. They include
 
 * `kbps <bitrate>`: on-the-fly switching of music quality
-* `website`: opens the douban music page for the current song using the browser specified in the shell variable `$BROWSER`; if the page url is not available e.g. for Jing.fm channels, it will open the search page on douban music
+* `webpage`: opens the douban music page for the current song using the browser specified in the shell variable `$BROWSER`; if the page url is not available e.g. for Jing.fm channels, it will open the search page on douban music
 
 ## Music Caching
 
