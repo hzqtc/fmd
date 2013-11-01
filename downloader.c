@@ -193,7 +193,6 @@ downloader_stack_t *stack_init()
     stack->multi_handle = curl_multi_init();
     pthread_mutex_init(&stack->mutex_op, NULL);
     pthread_mutex_init(&stack->mutex_elem, NULL);
-    pthread_mutex_init(&stack->mutex_cond, NULL);
     int i;
     for (i=0; i<DEFAULT_N_DOWNLOADERS; i++) {
         stack_add_downloader(stack, downloader_init());
@@ -267,11 +266,9 @@ downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downl
     printf("Initial perform finished\n");
     pthread_mutex_unlock(&stack->mutex_op);
 
-    pthread_mutex_lock(&stack->mutex_cond);
-    ret = condition(stack, start, length, data);
-    pthread_mutex_unlock(&stack->mutex_cond);
 
-    if (ret) {
+    // testing the condition without lock (testing it with lock might cause indefinite wait in some cases)
+    if ((ret = condition(stack, start, length, data))) {
         downloader_unlock_all(start, length);
         return ret;
     }
@@ -328,12 +325,7 @@ downloader_t *stack_perform_until_condition_met(downloader_stack_t *stack, downl
         pthread_mutex_unlock(&stack->mutex_op);
 
         /*printf("Testing the condition\n");*/
-        // testing the condition using another lock
-        pthread_mutex_lock(&stack->mutex_cond);
-        ret = condition(stack, start, length, data);
-        pthread_mutex_unlock(&stack->mutex_cond);
-
-        if (ret) {
+        if ((ret = condition(stack, start, length, data))) {
             downloader_unlock_all(start, length);
             return ret;
         }
@@ -450,6 +442,5 @@ void stack_free(downloader_stack_t *stack)
     curl_multi_cleanup(stack->multi_handle);
     pthread_mutex_destroy(&stack->mutex_op);
     pthread_mutex_destroy(&stack->mutex_elem);
-    pthread_mutex_destroy(&stack->mutex_cond);
     free(stack);
 }

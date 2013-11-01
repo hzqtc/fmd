@@ -60,7 +60,6 @@ typedef struct {
     CURL *multi_handle;
     pthread_mutex_t mutex_op;
     pthread_mutex_t mutex_elem;
-    pthread_mutex_t mutex_cond;
 } downloader_stack_t;
 
 downloader_stack_t *stack_init();
