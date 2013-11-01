@@ -167,7 +167,7 @@ void app_client_handler(void *ptr, char *input, char *output)
                 fm_song_t *current = fm_playlist_current(&app->playlist);
                 if (escapesh(url, current->url)[0] == '\0') {
                     // we need to make a custom url to open
-                    sprintf(url, "%s %s", current->artist, current->title);
+                    sprintf(url, "%s %s", current->artist, current->album);
                     // first obtain a curl instance to escape the query
                     downloader_t *d = stack_get_idle_downloader(app->playlist.stack, dAny);
                     char *st = curl_easy_escape(d->curl, url, 0);
