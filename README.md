@@ -2,6 +2,10 @@
 
 FMD stands for Douban FM Daemon, inspired by MPD (Music Player Daemon). FMD plays music from Douban FM in background and communicate with clients through TCP connections.
 
+# Forks
+
+* [lynnard/fmd](https://github.com/lynnard/fmd): Support Jing.fm, local music cache, AAC file format
+
 ## Config
 
 The main config file is `~/.fmd/fmd.conf`. Config file includes several sections.
