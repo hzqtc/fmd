@@ -1,4 +1,5 @@
 #include "playlist.h"
+#include "util.h"
 
 #include <json/json.h>
 
@@ -25,13 +26,14 @@ static void fm_song_free(fm_song_t *song)
 static fm_song_t* fm_song_parse_json(struct json_object *obj)
 {
     fm_song_t *song = (fm_song_t*) malloc(sizeof(fm_song_t));
-    song->title = strdup(json_object_get_string(json_object_object_get(obj, "title")));
-    song->artist = strdup(json_object_get_string(json_object_object_get(obj, "artist")));
-    song->album = strdup(json_object_get_string(json_object_object_get(obj, "albumtitle")));
+    const char json_escape = '\"';
+    song->title = escape(json_object_get_string(json_object_object_get(obj, "title")), json_escape);
+    song->artist = escape(json_object_get_string(json_object_object_get(obj, "artist")), json_escape);
+    song->album = escape(json_object_get_string(json_object_object_get(obj, "albumtitle")), json_escape);
     song->pubdate = json_object_get_int(json_object_object_get(obj, "public_time"));
-    song->cover = strdup(json_object_get_string(json_object_object_get(obj, "picture")));
-    song->url = strdup(json_object_get_string(json_object_object_get(obj, "album")));
-    song->audio = strdup(json_object_get_string(json_object_object_get(obj, "url")));
+    song->cover = escape(json_object_get_string(json_object_object_get(obj, "picture")), json_escape);
+    song->url = escape(json_object_get_string(json_object_object_get(obj, "album")), json_escape);
+    song->audio = escape(json_object_get_string(json_object_object_get(obj, "url")), json_escape);
     song->sid = json_object_get_int(json_object_object_get(obj, "sid"));
     song->like = json_object_get_int(json_object_object_get(obj, "like"));
     if (song->sid == 0) {
