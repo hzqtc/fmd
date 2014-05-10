@@ -1,0 +1,20 @@
+description "fmd - douban.fm deamon"
+
+start on filesystem and static-network-up
+stop on runlevel [016]
+
+expect daemon
+respawn
+
+pre-start script
+    test -x /usr/local/bin/fmd || { stop; exit 0; }
+    if [ -x /usr/local/bin/fmd-update-conf.sh ]; then
+        /usr/local/bin/fmd-update-conf.sh > /root/.fmd/fmd.conf
+    fi
+end script
+
+exec /usr/local/bin/fmd
+
+post-start script
+    echo "play" | nc localhost 10098
+end script
