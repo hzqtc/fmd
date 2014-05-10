@@ -17,6 +17,8 @@ install fmd.init /etc/init.d/fmd
 update-rc.d -f fmd remove
 update-rc.d fmd defaults
 
+install fmd.upstart /etc/init/fmd.conf
+
 # Start service
 service fmd start
 
